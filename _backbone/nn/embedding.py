@@ -151,11 +151,11 @@ class ChgSpinEmbedding(nn.Module):
         assert embedding_size % 2 == 0, f"{embedding_size=} must be even"
 
         if self.embedding_target == "charge":
-            # Charge range: -100 to +100 → indices 0 to 200
+            # Charge range: -100 to +100 -> indices 0 to 200
             self._index_offset = 100
             self._num_embeddings = 201
         elif self.embedding_target == "spin":
-            # Spin range: 0 to 100 → indices 0 to 100
+            # Spin range: 0 to 100 -> indices 0 to 100
             self._index_offset = 0
             self._num_embeddings = 101
 

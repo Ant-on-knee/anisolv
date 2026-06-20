@@ -1,0 +1,62 @@
+# Citation metadata for the AniSolv code.
+#
+# NOTE: the trained model weights (model1.pt) are NOT in this repository. They are
+# released separately on Hugging Face under the FAIR Chemistry License — a derivative
+# of Meta's UMA (uma-s-1p2), not MIT. This file cites the *software*; please also cite
+# the UMA model (listed under `references`) that the weights derive from.
+#
+# TODO: bump `version` and `date-released` when the model is finalized.
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below, and please also cite the UMA model it derives from (see references)."
+title: "AniSolv: Implicit Solvation Model for MLIPs"
+type: software
+authors:
+  - family-names: Ni
+    given-names: Anton
+repository-code: "https://github.com/Ant-on-knee/anisolv"
+url: "https://github.com/Ant-on-knee/anisolv"
+license: MIT
+date-released: 2026-06-18
+references:
+  - type: article
+    title: "UMA: A Family of Universal Models for Atoms"
+    year: 2025
+    doi: 10.48550/arXiv.2506.23971
+    url: "https://arxiv.org/abs/2506.23971"
+    authors:
+      - family-names: Wood
+        given-names: "Brandon M."
+      - family-names: Dzamba
+        given-names: Misko
+      - family-names: Fu
+        given-names: Xiang
+      - family-names: Gao
+        given-names: Meng
+      - family-names: Shuaibi
+        given-names: Muhammed
+      - family-names: Barroso-Luque
+        given-names: Luis
+      - family-names: Abdelmaqsoud
+        given-names: Kareem
+      - family-names: Gharakhanyan
+        given-names: Vahe
+      - family-names: Kitchin
+        given-names: "John R."
+      - family-names: Levine
+        given-names: "Daniel S."
+      - family-names: Michel
+        given-names: Kyle
+      - family-names: Sriram
+        given-names: Anuroop
+      - family-names: Cohen
+        given-names: Taco
+      - family-names: Das
+        given-names: Abhishek
+      - family-names: Rizvi
+        given-names: Ammar
+      - family-names: Sahoo
+        given-names: "Sushree Jagriti"
+      - family-names: Ulissi
+        given-names: "Zachary W."
+      - family-names: Zitnick
+        given-names: "C. Lawrence"

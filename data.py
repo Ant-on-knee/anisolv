@@ -89,7 +89,7 @@ def radius_graph_cell_list(pos: torch.Tensor, cutoff: float) -> torch.Tensor:
         cand, torch.full_like(cand, -1),                                        # mask oob cells
     )
 
-    # 4. distance filter — mirror radius_graph: sqrt distance, <= cutoff, drop self
+    # 4. distance filter - mirror radius_graph: sqrt distance, <= cutoff, drop self
     centers = torch.arange(n, device=device)[:, None].expand_as(cand)
     real = cand >= 0
     dist = (pos[:, None, :] - pos[cand.clamp(min=0)]).norm(dim=2)                # [N,27*cap]

@@ -1,4 +1,4 @@
-"""Sample: hydration free energies (ΔG_solv in water) via the anisolv delta-corrector.
+"""Sample: hydration free energies (dG_solv in water) via the anisolv delta-corrector.
 
 takes a handful of small solutes, obtains the water solvation correction, and reports it against
 experimental hydration free energies.
@@ -7,7 +7,7 @@ Run from the repo root (torch + numpy + ASE; uses the bundled checkpoints/model1
 
     python anisolv/samples/H2O_single_point.py
 
-For the full thermodynamic cycle (geometry relaxation + harmonic vibrational ΔG) on a single
+For the full thermodynamic cycle (geometry relaxation + harmonic vibrational dG) on a single
 H2O, see the companion H2O_dGsolv.py.
 """
 
@@ -26,7 +26,7 @@ from anisolv import predict_solvation_energy  # noqa: E402
 
 EV_TO_KCAL = 23.060548  # 1 eV in kcal/mol
 
-# (ASE g2 name, label, experimental ΔG_hyd in kcal/mol). Experimental hydration free
+# (ASE g2 name, label, experimental dG_hyd in kcal/mol). Experimental hydration free
 # energies from the FreeSolv / MNSol compilations. All neutral closed-shell singlets, so
 # charge=0, spin=1 (the predict defaults).
 SOLUTES = [
@@ -42,7 +42,7 @@ SOLUTES = [
 def main() -> int:
     dE0, _ = predict_solvation_energy(molecule("H2O"), solvent=None)
     assert dE0 == 0.0, f"vacuum baseline not zero: {dE0} eV"
-    print(f"[check] vacuum baseline ΔE(H2O, solvent=None) = {dE0:.1f} eV  (expected exactly 0)\n")
+    print(f"[check] vacuum baseline dE(H2O, solvent=None) = {dE0:.1f} eV  (expected exactly 0)\n")
 
     print(f"{'solute':14s} {'formula':10s} {'n':>3} "
           f"{'dG_pred':>9} {'dG_exp':>9} {'error':>9}   (kcal/mol)")

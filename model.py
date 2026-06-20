@@ -17,6 +17,9 @@ from ._backbone.escn_moe import eSCNMDMoeBackbone
 
 _CKPT_DIR = Path(__file__).resolve().parent / "checkpoints"
 
+# Optimizaed execution modes will be added later
+_SUPPORTED_EXECUTION_MODES = {"general"}
+
 # Inference overrides applied on top of the checkpoint's backbone_config. These force the
 # torch-only, deterministic, molecular configuration the standalone package targets.
 _INFERENCE_OVERRIDES = dict(
@@ -24,8 +27,7 @@ _INFERENCE_OVERRIDES = dict(
     use_pbc=False,
     use_pbc_single=False,
     always_use_pbc=False,
-    use_quaternion_wigner=False,  # Euler/Jd path 
-    execution_mode="general",   # pure-torch backend (no triton/cpp)
+    use_quaternion_wigner=False,  # Euler/Jd path
     activation_checkpointing=False,
     regress_forces=True,
     direct_forces=False,        # conservative forces via autograd
@@ -62,13 +64,24 @@ def _resolve(checkpoint: str | Path) -> Path:
 
 
 def load_model(checkpoint: str | Path = "model1", device: str = "cpu",
-               dtype: torch.dtype = torch.float32) -> AniSolvModel:
+               dtype: torch.dtype = torch.float32,
+               execution_mode: str = "general") -> AniSolvModel:
     """Build and load the standalone delta model from a converted checkpoint.
 
     `checkpoint` is 'model1' (default, in anisolv/checkpoints) or a path to a converted .pt.
     Returns an AniSolvModel in eval mode on `device` with params cast to `dtype` (use
     torch.float64 for high-accuracy checks).
+
+    `execution_mode` selects the backbone backend. Only 'general' (pure-torch) is wired up
+    today; the fast backends still need prepare_for_inference, which this loader does not
+    call yet, so anything else raises NotImplementedError.
     """
+    if execution_mode not in _SUPPORTED_EXECUTION_MODES:
+        raise NotImplementedError(
+            f"execution_mode={execution_mode!r} is not wired into the standalone loader yet "
+            f"(the fast backends need prepare_for_inference). "
+            f"Supported: {sorted(_SUPPORTED_EXECUTION_MODES)}."
+        )
     path = _resolve(checkpoint)
     ckpt = torch.load(str(path), map_location="cpu", weights_only=True)
     if ckpt.get("format") != "anisolv-ckpt-v1":

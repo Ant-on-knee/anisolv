@@ -178,8 +178,8 @@ def compute_forces_and_stress(
     The virial is:
         V = (g_r^T r + r^T g_r) / 2 + (cell^T g_h + g_h^T cell) / 2
 
-    where g_r = dE/dpos and g_h = dE/dcell. This matches dE/dε for a symmetric
-    strain ε applied as r' = r(I + ε), h' = h(I + ε).
+    where g_r = dE/dpos and g_h = dE/dcell. This matches dE/deps for a symmetric
+    strain eps applied as r' = r(I + eps), h' = h(I + eps).
 
     Args:
         energy_part: System-level energy before GP reduction, shape [num_systems].
@@ -305,7 +305,7 @@ def compute_hessian(
     """Compute Hessian matrix as second derivative of energy w.r.t. positions.
 
     The Hessian is computed as the negative gradient of forces with respect to
-    positions: H = -∇_pos(forces) = ∇²_pos(energy).
+    positions: H = -grad_pos(forces) = grad^2_pos(energy).
 
     Args:
         forces: Force tensor, shape [N, 3].

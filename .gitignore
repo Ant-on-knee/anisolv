@@ -2,3 +2,7 @@ checkpoints/
 __pycache__/
 *.pyc
 .vscode/
+
+build/
+dist/
+*.egg-info/

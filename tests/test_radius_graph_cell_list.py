@@ -5,7 +5,7 @@ edge set as the O(N^2) reference across sizes, densities, and degenerate cell la
 shows the timing gap (and a size where the brute-force cdist can't even allocate).
 
 The reference is called with an effectively infinite max_neighbors so its degeneracy cap never
-fires — the cell list has no cap, so this is the apples-to-apples comparison (the cap is a
+fires - the cell list has no cap, so this is the apples-to-apples comparison (the cap is a
 no-op at molecular densities anyway; see radius_graph).
 
     python anisolv/tests/test_radius_graph_cell_list.py
@@ -36,7 +36,7 @@ def edge_key(ei: torch.Tensor, n: int) -> torch.Tensor:
 
 def compare(a: torch.Tensor, b: torch.Tensor, pos: torch.Tensor, cutoff: float, n: int):
     """(match, n_boundary_ties, max_dev): edge sets must agree except for pairs whose TRUE
-    distance is within BOUNDARY_TOL of `cutoff` — the only place a sqrt-vs-matmul distance
+    distance is within BOUNDARY_TOL of `cutoff` - the only place a sqrt-vs-matmul distance
     (cell list vs cdist) can legitimately split a tie."""
     ka, kb = edge_key(a, n), edge_key(b, n)
     diff = torch.cat([ka[~torch.isin(ka, kb)], kb[~torch.isin(kb, ka)]])
@@ -48,7 +48,7 @@ def compare(a: torch.Tensor, b: torch.Tensor, pos: torch.Tensor, cutoff: float, 
 
 
 def cloud(n: int, density: float = 0.05) -> torch.Tensor:
-    """n atoms uniformly in a cube sized for `density` atoms/Å^3 (organic liquids ~0.03–0.1)."""
+    """n atoms uniformly in a cube sized for `density` atoms/angstrom^3 (organic liquids ~0.03-0.1)."""
     box = (n / density) ** (1 / 3)
     return torch.rand(n, 3) * box
 
@@ -77,7 +77,7 @@ def main() -> int:
         tag = "OK" if m else f"MISMATCH (max dev {dev:.1e})"
         print(f"{name:16s} {n:6d} {eb.shape[1]:10d} {tb:9.3f} {tc:9.3f} {n_ties:5d}  {tag}")
 
-    # A size where the reference's [N,N] cdist is ~9 GB — cell list only.
+    # A size where the reference's [N,N] cdist is ~9 GB - cell list only.
     n = 30000
     pos = cloud(n)
     t0 = time.perf_counter(); ec = radius_graph_cell_list(pos, cutoff); tc = time.perf_counter() - t0

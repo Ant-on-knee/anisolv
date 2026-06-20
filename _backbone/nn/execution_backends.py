@@ -51,7 +51,7 @@ class ExecutionBackend:
     operations. Subclass and override methods with optimized kernels
     (e.g. Triton) for specific execution modes.
 
-    All methods are static — backends carry no instance state.
+    All methods are static - backends carry no instance state.
 
     Methods (override for optimization):
         - node_to_edge_wigner_permute: Gather node features and rotate L->M
@@ -358,7 +358,7 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         mappingReduced,
         coefficient_index: torch.Tensor | None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        # Passthrough — Triton kernels handle L-to-M internally
+        # Passthrough - Triton kernels handle L-to-M internally
         return wigner, wigner_inv
 
     @staticmethod

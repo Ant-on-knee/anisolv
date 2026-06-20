@@ -1,6 +1,6 @@
 """anisolv - package which adds a standalone solvation correction for a given geometry and solvent
 
-Loads a converted anisolv checkpoint and returns ΔE = E_solv - E_gas plus the
+Loads a converted anisolv checkpoint and returns dE = E_solv - E_gas plus the
 matching force correction, as an additive term for any gas-phase potential. Depends only
 on PyTorch + numpy (ASE optional, for I/O). See DOCS.md.
 

@@ -14,7 +14,6 @@ import warnings
 import numpy as np
 import torch
 import torch.nn as nn
-from matplotlib import pyplot as plt
 
 from anisolv._backbone._compat.registry import registry
 from anisolv._backbone._compat.utils import conditional_grad
@@ -178,6 +177,9 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         if not self.training or self.num_experts == 0:
             return
         if not hasattr(self, "fig"):
+            # Training-only diagnostic; imported lazily so inference needs only torch + numpy.
+            from matplotlib import pyplot as plt
+
             self.fig, self.axs = plt.subplots(2, 1)
         with torch.no_grad():
             if self.counter % 500 == 0:
@@ -303,7 +305,7 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         """
         Merge MOLE layers into single Linear for single-dataset inference.
 
-        Sets one-hot expert coefficients and replaces all MOLE→Linear.
+        Sets one-hot expert coefficients and replaces all MOLE->Linear.
         """
         self.merged_on_dataset = data.dataset[0]
         expert_idx = self.dataset_name_to_exp[self.merged_on_dataset]

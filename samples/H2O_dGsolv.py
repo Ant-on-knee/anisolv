@@ -1,18 +1,18 @@
-"""Sample: ΔG_solv of H2O in water via the harmonic thermodynamic cycle (vibrational).
+"""Sample: dG_solv of H2O in water via the harmonic thermodynamic cycle (vibrational).
 
 The full-cycle companion to H2O_single_point.py. Where the single-point sample reports the
-bare electronic correction ΔE = E_solv − E_gas, this one adds the vibrational/thermal leg,
-reproducing — for a single H2O — the cluster MNSol driver's gas_leg / solv_leg / assemble
+bare electronic correction dE = E_solv - E_gas, this one adds the vibrational/thermal leg,
+reproducing - for a single H2O - the cluster MNSol driver's gas_leg / solv_leg / assemble
 (unisolv_training/solvation_fe):
 
     1. relax H2O in the gas phase with a base potential          -> E_gas, then harmonic G_gas
     2. relax H2O in water with (base + anisolv water delta)      -> E_solv, then harmonic G_solv
-    3. ΔG_solv = G_solv − G_gas                                  (reported in kcal/mol)
+    3. dG_solv = G_solv - G_gas                                  (reported in kcal/mol)
 
 WHY A BASE POTENTIAL IS NEEDED
 ------------------------------
-anisolv only adds a solvation correction: ``predict_solvation_energy`` returns only dE = E_solv − E_gas,
-a correction — not a full potential energy surface. You cannot run a vibrational analysis on
+anisolv only adds a solvation correction: ``predict_solvation_energy`` returns only dE = E_solv - E_gas,
+a correction - not a full potential energy surface. You cannot run a vibrational analysis on
 the delta alone (it has no bound minimum). So the solvated surface is E_base(R) + dE_anisolv(R)
 and the gas surface is E_base(R); only the delta part is torch-only. This sample defaults to
 the UMA-small base (fairchem) whose underlying architecture anisolv was trained on,
@@ -50,9 +50,9 @@ _ZERO_MODE_eV = 1e-4  # modes below this |energy| are trans/rot remnants / numer
 class AniSolvDeltaCalculator(Calculator):
     """``predict_solvation_energy`` as an ASE calculator (the additive solvation correction).
 
-    Energy/forces are the ΔE/ΔF the model predicts; reads ``charge``/``spin``/``solvent`` from
+    Energy/forces are the dE/dF the model predicts; reads ``charge``/``spin``/``solvent`` from
     ``atoms.info`` (defaults 0 / 1 / ``"water"``). ``check_state`` is widened so that changing
-    only the solvent in ``atoms.info`` (same geometry) still triggers a recompute — mirrors
+    only the solvent in ``atoms.info`` (same geometry) still triggers a recompute - mirrors
     unisolv_training/solvation_fe/unisolv_calc.py.
     """
 
@@ -93,13 +93,13 @@ class AniSolvDeltaCalculator(Calculator):
 
 
 def make_uma_base(device="cpu"):
-    """Default base gas-phase potential: UMA-small (omol) via fairchem — what anisolv corrects."""
+    """Default base gas-phase potential: UMA-small (omol) via fairchem - what anisolv corrects."""
     try:
         from fairchem.core import FAIRChemCalculator, pretrained_mlip
     except ImportError as exc:  # keep the failure actionable
         raise SystemExit(
             "H2O_dGsolv.py needs a base gas-phase potential for the vibrational cycle, and the "
-            "default is UMA-small via fairchem — which isn't importable here.\n"
+            "default is UMA-small via fairchem - which isn't importable here.\n"
             f"  ({exc})\n"
             "Either run this in the fairchem env (e.g. `conda run -n unisolv`), or call "
             "main(base=<your ASE calculator>) to supply any other gas-phase potential."
@@ -117,9 +117,9 @@ def relax(atoms, calc, fmax=0.02, steps=300):
 
 
 def harmonic_gibbs(atoms, calc, temperature=298.15, delta=0.01):
-    """Harmonic free energy (eV) at ``atoms`` — adapted from solvation_fe/thermo.vib_gibbs.
+    """Harmonic free energy (eV) at ``atoms`` - adapted from solvation_fe/thermo.vib_gibbs.
 
-    Treats the Helmholtz F = E_elec + ZPE + U_vib − T·S_vib as G: the pV term is negligible
+    Treats the Helmholtz F = E_elec + ZPE + U_vib - T*S_vib as G: the pV term is negligible
     and translation/rotation cancel between the gas and solvated geometries of one molecule.
     Returns (G_eV, E_elec_eV, zpe_eV, n_imag).
     """
@@ -139,7 +139,7 @@ def harmonic_gibbs(atoms, calc, temperature=298.15, delta=0.01):
     real_pos = np.array([e.real for e in vib_modes
                          if abs(e.imag) <= _ZERO_MODE_eV and e.real > _ZERO_MODE_eV])
     if n_imag:
-        print(f"[thermo] WARNING: {n_imag} imaginary mode(s) — geometry not a true minimum; "
+        print(f"[thermo] WARNING: {n_imag} imaginary mode(s) - geometry not a true minimum; "
               "excluded from the free energy.")
 
     zpe = float(np.sum(real_pos) / 2.0)
@@ -161,7 +161,7 @@ def water() -> Atoms:
 def main(base=None, device="cpu", temperature=298.15) -> int:
     base = base if base is not None else make_uma_base(device=device)
     delta = AniSolvDeltaCalculator(device=device)
-    solv_calc = SumCalculator([base, delta])  # E_solv = E_base + ΔE_anisolv
+    solv_calc = SumCalculator([base, delta])  # E_solv = E_base + dE_anisolv
 
     # --- gas leg: relax + harmonic G on the base surface (solvent-independent) ---
     gas = water()
@@ -176,7 +176,7 @@ def main(base=None, device="cpu", temperature=298.15) -> int:
 
     # --- assemble ---
     dE_elec = (e_solv - e_gas) * EV_TO_KCAL          # electronic (single-point-like) leg
-    dG_solv = (g_solv - g_gas) * EV_TO_KCAL          # full cycle, incl. vibrational ΔG
+    dG_solv = (g_solv - g_gas) * EV_TO_KCAL          # full cycle, incl. vibrational dG
 
     print(f"\nH2O solvation in water  (T = {temperature:.2f} K)")
     print(f"  base potential        : {type(base).__name__}")
@@ -186,10 +186,10 @@ def main(base=None, device="cpu", temperature=298.15) -> int:
     print(f"  solv  : E = {e_solv:12.6f} eV   ZPE = {zpe_solv:.4f} eV   "
           f"G = {g_solv:12.6f} eV   ({'min' if not n_imag_solv else f'{n_imag_solv} imag'}, "
           f"{'conv' if conv_solv else 'UNCONVERGED'})")
-    print(f"\n  ΔE_elec  (E_solv − E_gas)        = {dE_elec:+8.2f} kcal/mol")
-    print(f"  ΔG_vib   (vibrational/thermal)   = {dG_solv - dE_elec:+8.2f} kcal/mol")
-    print(f"  ΔG_solv  (G_solv − G_gas)        = {dG_solv:+8.2f} kcal/mol   "
-          f"(exp. ≈ -6.3 kcal/mol)")
+    print(f"\n  dE_elec  (E_solv - E_gas)        = {dE_elec:+8.2f} kcal/mol")
+    print(f"  dG_vib   (vibrational/thermal)   = {dG_solv - dE_elec:+8.2f} kcal/mol")
+    print(f"  dG_solv  (G_solv - G_gas)        = {dG_solv:+8.2f} kcal/mol   "
+          f"(exp. ~= -6.3 kcal/mol)")
     return 0
 
 
