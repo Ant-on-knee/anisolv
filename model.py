@@ -12,13 +12,33 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from ._backbone.escn_md import MLP_EFS_Head
+from ._backbone.escn_md import MLP_EFS_Head, eSCNMDBackbone
 from ._backbone.escn_moe import eSCNMDMoeBackbone
 
-_CKPT_DIR = Path(__file__).resolve().parent / "checkpoints"
+_CKPT_DIR = Path(__file__).resolve().parent / "models"
 
-# Optimizaed execution modes will be added later
+# Optimized execution modes will be added later
 _SUPPORTED_EXECUTION_MODES = {"general"}
+
+# Default checkpoint selection. 'model1' (full-accuracy, gated UMA-derived weights) ships
+# separately and may be absent; 'model1_compact' (trained from scratch, ~25 MB) is bundled in
+# the repo, so it is always available as a fallback.
+_DEFAULT_CHECKPOINT = "model1"
+_FALLBACK_CHECKPOINT = "model1_compact"
+
+
+def default_checkpoint() -> str:
+    """Checkpoint used when the caller names none: 'model1' if its .pt is present in the
+    bundled models dir, else the always-present 'model1_compact' fallback."""
+    if (_CKPT_DIR / f"{_DEFAULT_CHECKPOINT}.pt").exists():
+        return _DEFAULT_CHECKPOINT
+    return _FALLBACK_CHECKPOINT
+
+_BACKBONES = {
+    "eSCNMDBackbone": eSCNMDBackbone,        # non-MoE, solvent-conditioned (model1_compact)
+    "eSCNMDMoeBackbone": eSCNMDMoeBackbone,  # UMA-S-1.2 mixture-of-experts (model1, default)
+}
+_DEFAULT_BACKBONE = "eSCNMDMoeBackbone"
 
 # Inference overrides applied on top of the checkpoint's backbone_config. These force the
 # torch-only, deterministic, molecular configuration the standalone package targets.
@@ -63,19 +83,22 @@ def _resolve(checkpoint: str | Path) -> Path:
     )
 
 
-def load_model(checkpoint: str | Path = "model1", device: str = "cpu",
+def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
                dtype: torch.dtype = torch.float32,
                execution_mode: str = "general") -> AniSolvModel:
     """Build and load the standalone delta model from a converted checkpoint.
 
-    `checkpoint` is 'model1' (default, in anisolv/checkpoints) or a path to a converted .pt.
-    Returns an AniSolvModel in eval mode on `device` with params cast to `dtype` (use
-    torch.float64 for high-accuracy checks).
+    `checkpoint` is None (auto: 'model1' if its weights are present in anisolv/models, else the
+    bundled 'model1_compact'), a checkpoint name, or a path to a converted .pt. Returns an
+    AniSolvModel in eval mode on `device` with params cast to `dtype` (use torch.float64 for
+    high-accuracy checks).
 
     `execution_mode` selects the backbone backend. Only 'general' (pure-torch) is wired up
     today; the fast backends still need prepare_for_inference, which this loader does not
     call yet, so anything else raises NotImplementedError.
     """
+    if checkpoint is None:
+        checkpoint = default_checkpoint()
     if execution_mode not in _SUPPORTED_EXECUTION_MODES:
         raise NotImplementedError(
             f"execution_mode={execution_mode!r} is not wired into the standalone loader yet "
@@ -88,10 +111,17 @@ def load_model(checkpoint: str | Path = "model1", device: str = "cpu",
         raise ValueError(f"{path} is not an anisolv-ckpt-v1 checkpoint")
 
     cfg = dict(ckpt["backbone_config"])
+    cls_name = str(cfg.get("model", "")).rsplit(".", 1)[-1] or _DEFAULT_BACKBONE
+    try:
+        backbone_cls = _BACKBONES[cls_name]
+    except KeyError:
+        raise ValueError(
+            f"{path}: unsupported backbone class {cls_name!r} (known: {sorted(_BACKBONES)})"
+        ) from None
     cfg.pop("model", None)  # class-path artifact, not a constructor kwarg
     cfg.update(_INFERENCE_OVERRIDES)
 
-    backbone = eSCNMDMoeBackbone(**cfg)
+    backbone = backbone_cls(**cfg)
     head = MLP_EFS_Head(backbone)  # nulls backbone.energy_block/force_block internally
     model = AniSolvModel(backbone, head, ckpt["norm"])
 

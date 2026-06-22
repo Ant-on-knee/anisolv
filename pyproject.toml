@@ -42,5 +42,7 @@ packages = [
 ]
 
 [tool.setuptools.package-data]
-"anisolv" = ["_const/*.json", "_const/*.pt"]
+# Bundle the compact (non-gated) weights so a plain `pip install` works out of the box.
+# model1.pt is intentionally excluded — it is gated and downloaded separately.
+"anisolv" = ["_const/*.json", "_const/*.pt", "models/model1_compact.pt"]
 "anisolv._backbone" = ["*.pt"]

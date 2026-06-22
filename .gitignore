@@ -1,4 +1,5 @@
-checkpoints/
+models/*.pt
+!models/model1_compact.pt
 __pycache__/
 *.pyc
 .vscode/

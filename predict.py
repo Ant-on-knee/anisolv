@@ -12,7 +12,7 @@ import numpy as np
 import torch
 
 from .data import build_atomic_data
-from .model import load_model
+from .model import default_checkpoint, load_model
 from .solvent import get_solvent_vector
 
 _MODEL_CACHE: dict = {}
@@ -35,7 +35,7 @@ def predict_solvation_energy(
     charge: int = 0,
     spin: int = 1,
     solvent=_DEFAULT_SOLVENT,
-    checkpoint: str = "model1",
+    checkpoint: str | None = None,
     device: str = "cpu",
     dtype: torch.dtype = torch.float32,
     execution_mode: str = "general",
@@ -47,10 +47,13 @@ def predict_solvation_energy(
     solvent         : solvent name (str), or None for the gas/vacuum baseline. Left unset it
                       defaults to 'water' (the repo's water-SMD target). The model is gated,
                       so solvent=None yields exactly zero dE/dF.
-    checkpoint      : 'model1' (default) or a path to a converted .pt.
+    checkpoint      : None (default; auto-selects 'model1' if its weights are present, else the
+                      bundled 'model1_compact'), a checkpoint name, or a path to a converted .pt.
     dtype           : torch.float32 (default) or torch.float64.
     execution_mode  : backbone backend.
     """
+    if checkpoint is None:
+        checkpoint = default_checkpoint()
     model = _get_model(checkpoint, device, dtype, execution_mode)
 
     if solvent is _DEFAULT_SOLVENT:
