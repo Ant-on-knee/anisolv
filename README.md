@@ -86,10 +86,17 @@ hf auth login                  # paste a token from https://huggingface.co/setti
   hf download antonknee/anisolv model1.pt --local-dir models
   ```
 
-- **Otherwise**, download it anywhere and pass an absolute path at call time:
+- **If you installed with a plain `pip install`** (from PyPI or `pip install git+…`), 
+  download it to any directory you control and pass its **absolute path** at call time. Until you do,
+  the bundled `model1_compact` stays the default, so the package still works:
+
+  ```bash
+  hf download antonknee/anisolv model1.pt --local-dir /path/to/anisolv-weights
+  ```
 
   ```python
-  predict_solvation_energy(..., checkpoint="/abs/path/to/model1.pt")
+  from anisolv import predict_solvation_energy
+  predict_solvation_energy(..., checkpoint="/path/to/anisolv-weights/model1.pt")  # absolute path
   ```
 
 > **License note:** these weights are a derivative of Meta's UMA (`uma-s-1p2`) and are governed by
