@@ -34,6 +34,16 @@ def default_checkpoint() -> str:
         return _DEFAULT_CHECKPOINT
     return _FALLBACK_CHECKPOINT
 
+
+def default_checkpoint_path() -> Path:
+    """Filesystem path to the .pt that `load_model(checkpoint=None)` would load."""
+    return _resolve(default_checkpoint())
+
+
+def print_default_checkpoint_path() -> None:
+    """Print the path to the default model checkpoint."""
+    print(default_checkpoint_path())
+
 _BACKBONES = {
     "eSCNMDBackbone": eSCNMDBackbone,        # non-MoE, solvent-conditioned (model1_compact)
     "eSCNMDMoeBackbone": eSCNMDMoeBackbone,  # UMA-S-1.2 mixture-of-experts (model1, default)
