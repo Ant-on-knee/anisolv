@@ -3,7 +3,7 @@
 takes a handful of small solutes, obtains the water solvation correction, and reports it against
 experimental hydration free energies.
 
-Run from the repo root (torch + numpy + ASE; uses the bundled checkpoints/model1.pt):
+Run from the repo root (torch + numpy + ASE; uses the default checkpoint in anisolv/models):
 
     python anisolv/samples/H2O_single_point.py
 

@@ -24,9 +24,20 @@ where $\Delta E = E_{\text{solv}} - E_{\text{gas}}$. Key properties:
 
 ### Model(s)
 
-`model1` is a 64-expert MoLE `eSCNMDMoeBackbone` with a per-system **solvent embedding** and an
-**output gate**. It was **warmstarted from Meta's UMA `uma-s-1p2`** and fine-tuned on a
-solvation free-energy correction objective. Because it derives from UMA, the **weights are released under the FAIR Chemistry License** (see [License](#license)).
+Two checkpoints are available, both with a per-system **solvent embedding** and an **output gate**
+(vacuum → exactly 0). `load_model` / `predict_solvation_energy` auto-select the backbone from the
+checkpoint, so you switch models purely via `checkpoint=`:
+
+- **`model1`** (default when present) — a 64-expert MoLE `eSCNMDMoeBackbone` (~291 M params), the
+  full-accuracy model. **Warmstarted from Meta's UMA `uma-s-1p2`** and fine-tuned on a solvation
+  free-energy correction objective. Its weights are gated and **not** in this repo (see below).
+- **`model1_compact`** — a non-MoE `eSCNMDBackbone` (~6.4 M params, ~25 MB) for fast / low-memory
+  inference, same solvent-conditioning and gate. Trained from scratch (not UMA-derived), so it is
+  **MIT-licensed and bundled in this repo** at `models/model1_compact.pt` — no download needed.
+
+Leaving `checkpoint` unset (`None`) auto-selects `model1` when its weights are present and otherwise
+falls back to the bundled `model1_compact`, so the package runs out of the box. Because `model1`
+derives from UMA, its **weights are released under the FAIR Chemistry License** (see [License](#license)).
 
 ## Installation
 
@@ -63,23 +74,29 @@ Chemistry License. You must provide your full legal name, date of birth, and org
 
 ```bash
 pip install huggingface_hub
-huggingface-cli login          # paste a token from https://huggingface.co/settings/tokens
+hf auth login                  # paste a token from https://huggingface.co/settings/tokens
 ```
 
 **3. Download the checkpoint.**
 
 - **If you cloned the repo and installed with `pip install -e .`**, drop it where the default
-  `checkpoint="model1"` looks (`checkpoints/model1.pt` under the package root). Run this from the
-  repo root:
+  auto-selection looks (`models/model1.pt` under the package root). Run this from the repo root:
 
   ```bash
-  huggingface-cli download antonknee/anisolv model1.pt --local-dir checkpoints
+  hf download antonknee/anisolv model1.pt --local-dir models
   ```
 
-- **Otherwise**, download it anywhere and pass an absolute path at call time:
+- **If you installed with a plain `pip install`** (from PyPI or `pip install git+…`), 
+  download it to any directory you control and pass its **absolute path** at call time. Until you do,
+  the bundled `model1_compact` stays the default, so the package still works:
+
+  ```bash
+  hf download antonknee/anisolv model1.pt --local-dir /path/to/anisolv-weights
+  ```
 
   ```python
-  predict_solvation_energy(..., checkpoint="/abs/path/to/model1.pt")
+  from anisolv import predict_solvation_energy
+  predict_solvation_energy(..., checkpoint="/path/to/anisolv-weights/model1.pt")  # absolute path
   ```
 
 > **License note:** these weights are a derivative of Meta's UMA (`uma-s-1p2`) and are governed by
@@ -114,7 +131,7 @@ predict_solvation_energy(
     charge: int = 0,           # total charge
     spin: int = 1,             # spin multiplicity
     solvent="water",           # solvent name (str), or None for the vacuum baseline (-> exactly 0)
-    checkpoint: str = "model1",# "model1" (resolves to checkpoints/model1.pt) or a path to a .pt
+    checkpoint: str = "model1",# "model1" (default) / "model1_compact", or a path to a .pt
     device: str = "cpu",       # "cpu", "cuda", or "mps"
     dtype=torch.float32,       # torch.float32 (default) or torch.float64
 ) -> tuple[float, np.ndarray]  # (dE in eV, dF in eV/angstrom with shape [n_atoms, 3])
@@ -143,10 +160,12 @@ Solvents are conditioned through a descriptor embedding; the additional entries 
 
 ## License
 
-- **Inference code (this repository): MIT** - see [`LICENSE`](LICENSE).
-- **Model weights (`model1.pt`, on Hugging Face): FAIR Chemistry License v1.** A derivative of Meta's
-  UMA (`uma-s-1p2`); redistribution is permitted only under the same license. Use is subject to the
-  FAIR Chemistry Acceptable Use Policy and applicable Trade Control Laws.
+- **Inference code (this repository): MIT** - see [`LICENSE`](LICENSE). The bundled
+  **`model1_compact.pt`** weights are trained from scratch (not UMA-derived), so they fall under this
+  MIT license too.
+- **Full-accuracy weights (`model1.pt`, on Hugging Face): FAIR Chemistry License v1.** A derivative of
+  Meta's UMA (`uma-s-1p2`); redistribution is permitted only under the same license. Use is subject to
+  the FAIR Chemistry Acceptable Use Policy and applicable Trade Control Laws.
 
 ## Citation
 
