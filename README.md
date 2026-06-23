@@ -1,5 +1,5 @@
 <h1 align="center">AniSolv</h1>
-<p align="center"><em>A standalone solvation delta-corrector for machine-learning interatomic potentials.</em></p>
+<p align="center"><em>A solvation model for machine-learning interatomic potentials.</em></p>
 
 AniSolv predicts an **additive solvation correction** - an energy term $\Delta E$ and force
 term $\Delta F$ - that you add on top of *any* gas-phase potential to get solvated energies and
@@ -7,7 +7,7 @@ forces. Given a molecular geometry and a solvent, it computes the difference bet
 
 ## What it does
 
-AniSolv is **not** a standalone potential. It is a *delta-corrector*: it learns only the solvation
+AniSolv is a solvation correction for molecular systems. It is an *additive correction*: it learns only the solvation
 contribution, which you layer onto the gas-phase potential of your choice (e.g. a universal MLIP):
 
 $$
@@ -134,10 +134,42 @@ predict_solvation_energy(
     checkpoint: str = "model1",# "model1" (default) / "model1_compact", or a path to a .pt
     device: str = "cpu",       # "cpu", "cuda", or "mps"
     dtype=torch.float32,       # torch.float32 (default) or torch.float64
+    inference_settings="default",  # "default" (reference) or "fast" (see below)
 ) -> tuple[float, np.ndarray]  # (dE in eV, dF in eV/angstrom with shape [n_atoms, 3])
 ```
 
 To convert $\Delta E$ to kcal/mol, multiply by `23.060548`.
+
+### Faster inference
+
+`inference_settings` selects the compute path (also accepted by `load_model`):
+
+- **`"default"`** — the pure-torch reference path. Bit-for-bit identical to earlier releases.
+- **`"fast"`** — the block-diagonal SO2 GEMM backend plus TF32 matmuls and `torch.compile`.
+  - On the compact model it is **composition-independent**, so it speeds up *any* molecule (the
+    biggest win is on GPU).
+  - On the MoE `model1` the block-GEMM conversion would require a fixed-composition MOLE merge, so
+    `"fast"` **auto-downgrades to the general backend** there, and `torch.compile` is disabled too
+    (the MOLE expert-routing side-channel is not `torch.compile`-safe across graph breaks). You
+    still get TF32, which is the main GPU win.
+
+```python
+dE, dF = predict_solvation_energy((Z, R), checkpoint="model1_compact",
+                                  device="cuda", inference_settings="fast")
+```
+
+For full control, pass an `InferenceSettings` instead of a preset name:
+
+```python
+from anisolv import InferenceSettings, predict_solvation_energy
+settings = InferenceSettings(execution_mode="umas_fast_pytorch", tf32=True, compile=False)
+dE, dF = predict_solvation_energy((Z, R), checkpoint="model1_compact", inference_settings=settings)
+```
+
+> **`torch.compile` caveat:** the first call is slow (graph capture) and a new molecule *shape*
+> (atom/edge count) can trigger a recompile; if compilation fails the model falls back to eager
+> automatically. TF32 and `torch.compile` mainly help on GPU (TF32 is a no-op on CPU). The
+> GPU-only Triton backend (`umas_fast_gpu`) is not enabled yet.
 
 ## Sample scripts
 
@@ -150,10 +182,10 @@ python anisolv/samples/H2O_dGsolv.py         # full thermodynamic cycle: geometr
 
 ## Supported solvents
 
-The model is trained/validated on six solvents:
+The model is trained/validated on 21 solvents:
 
 - **Water** - reaches **SMD-level** accuracy.
-- **MeCN, MeOH, THF, CHCl3, DMSO** - **XTB-ALPB** accuracy.
+- **acetone, acetonitrile, aniline, benzaldehyde, benzene, ch2cl2 (dichloromethane), chcl3 (chloroform), cs2 (carbon disulfide), dioxane, dmf, dmso, ether (diethyl ether), ethylacetate, hexadecane, hexane, methanol, nitromethane, octanol, thf, toluene** - **XTB-ALPB** accuracy.
 
 Solvents are conditioned through a descriptor embedding; the additional entries in
 `_const/solvent_descriptors.json` are not validated targets.

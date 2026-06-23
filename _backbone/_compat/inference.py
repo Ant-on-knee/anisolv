@@ -13,7 +13,7 @@ loader (model.py) sets the few that matter (use_quaternion_wigner=False, etc.).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 
 CHARGE_RANGE = [-100, 100]
@@ -47,3 +47,41 @@ class InferenceSettings:
     predict_untrained_stress: set = field(default_factory=set)
     predict_untrained_hessian: set = field(default_factory=set)
     auto_add_default_untrained_tasks: bool = True
+
+
+# Named presets, mirroring fairchem's NAME_TO_INFERENCE_SETTING WITHOUT importing fairchem.
+# "default" reproduces the legacy torch-only path bit-for-bit (general backend, no tf32/compile).
+# "fast" requests the block-GEMM backend plus tf32 + torch.compile. On MoE checkpoints the
+# standalone loader (model.py) downgrades execution_mode to "general" (the block-GEMM conversion
+# needs a MOLE merge first -- a fixed-composition path reserved for later) AND disables
+# torch.compile (the MOLE routing side-channel is not dynamo-safe across graph breaks); tf32 still
+# applies there. merge_mole stays False everywhere here, so every preset is composition-independent
+# and safe for multi-molecule callers.
+NAME_TO_INFERENCE_SETTING = {
+    "default": InferenceSettings(
+        execution_mode="general", tf32=False, compile=False, merge_mole=False
+    ),
+    "fast": InferenceSettings(
+        execution_mode="umas_fast_pytorch", tf32=True, compile=True, merge_mole=False
+    ),
+}
+
+
+def guess_inference_settings(settings: str | InferenceSettings) -> InferenceSettings:
+    """Resolve a preset name or an InferenceSettings into an InferenceSettings.
+
+    A string must be a key of NAME_TO_INFERENCE_SETTING; it returns a *copy* so callers can
+    mutate the result without touching the shared preset. An InferenceSettings is passed through.
+    """
+    if isinstance(settings, str):
+        if settings not in NAME_TO_INFERENCE_SETTING:
+            raise ValueError(
+                f"inference_settings must be one of {sorted(NAME_TO_INFERENCE_SETTING)} "
+                f"or an InferenceSettings; got {settings!r}"
+            )
+        return replace(NAME_TO_INFERENCE_SETTING[settings])
+    if isinstance(settings, InferenceSettings):
+        return settings
+    raise ValueError(
+        f"inference_settings must be str or InferenceSettings, got {type(settings).__name__}"
+    )

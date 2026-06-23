@@ -84,6 +84,61 @@ def test_gate_off_is_nonzero_in_vacuum():
     assert e_vac.abs().max().item() > 0.0
 
 
+def test_umas_fast_pytorch_matches_general():
+    """The block-GEMM (umas_fast_pytorch) backend is an exact reorder of the general backend's
+    weights, so on a non-MoE backbone it must reproduce energy/forces to float64 precision."""
+    from anisolv._backbone._compat.inference import InferenceSettings
+
+    def _build(execution_mode):
+        # Same seed + construction order -> identical weights across the two backends.
+        torch.manual_seed(0)
+        backbone = eSCNMDBackbone(
+            max_num_elements=100,
+            sphere_channels=4,
+            lmax=2,
+            mmax=2,
+            otf_graph=False,
+            edge_channels=5,
+            num_distance_basis=7,
+            use_dataset_embedding=False,
+            use_solvent_embedding=True,
+            solvent_emb_hidden=8,
+            solvent_output_gate=True,
+            always_use_pbc=False,
+            use_pbc=False,
+            use_quaternion_wigner=False,
+            execution_mode=execution_mode,
+            activation_checkpointing=False,
+            direct_forces=False,
+            regress_stress=False,
+        )
+        head = MLP_EFS_Head(backbone)
+        return backbone.to(_DTYPE).eval(), head.to(_DTYPE).eval()
+
+    vec = get_solvent_vector("water", strict=False)
+
+    def _eval(backbone, head, settings=None):
+        data = build_atomic_data(
+            (_NUMBERS, _POS), charge=0, spin=1, solvent=vec, dtype=_DTYPE,
+        )
+        data["pos"].requires_grad_(True)
+        if settings is not None:
+            backbone = backbone.prepare_for_inference(data, settings)  # may return new obj
+        out = head(data, backbone(data))
+        e = out["energy"]["energy"] if isinstance(out["energy"], dict) else out["energy"]
+        f = out["forces"]["forces"] if isinstance(out["forces"], dict) else out["forces"]
+        return e, f
+
+    bg, hg = _build("general")
+    e0, f0 = _eval(bg, hg)
+
+    bf, hf = _build("umas_fast_pytorch")
+    e1, f1 = _eval(bf, hf, settings=InferenceSettings(execution_mode="umas_fast_pytorch"))
+
+    assert (e0 - e1).abs().max().item() < 1e-7
+    assert (f0 - f1).abs().max().item() < 1e-7
+
+
 def test_encoding_is_vacuum_anchored():
     """Physical gas phase (n=1, eps=1, rest 0) normalizes to all zeros."""
     from anisolv.solvent import normalize
