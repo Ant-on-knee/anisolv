@@ -1,5 +1,5 @@
 <h1 align="center">AniSolv</h1>
-<p align="center"><em>A standalone solvation delta-corrector for machine-learning interatomic potentials.</em></p>
+<p align="center"><em>A solvation model for machine-learning interatomic potentials.</em></p>
 
 AniSolv predicts an **additive solvation correction** - an energy term $\Delta E$ and force
 term $\Delta F$ - that you add on top of *any* gas-phase potential to get solvated energies and
@@ -7,8 +7,7 @@ forces. Given a molecular geometry and a solvent, it computes the difference bet
 
 ## What it does
 
-AniSolv is **not** a standalone potential. It is a *delta-corrector*: it learns only the solvation
-contribution, which you layer onto the gas-phase potential of your choice (e.g. a universal MLIP):
+AniSolv is a solvation correction for molecular systems. It is an *additive correction*: it learns only the solvation contribution, which you layer onto the gas-phase potential of your choice (e.g. a universal MLIP):
 
 $$
 \begin{aligned}
@@ -134,10 +133,48 @@ predict_solvation_energy(
     checkpoint: str = "model1",# "model1" (default) / "model1_compact", or a path to a .pt
     device: str = "cpu",       # "cpu", "cuda", or "mps"
     dtype=torch.float32,       # torch.float32 (default) or torch.float64
+    inference_settings="default",  # "default" (reference) or "fast" (see below)
 ) -> tuple[float, np.ndarray]  # (dE in eV, dF in eV/angstrom with shape [n_atoms, 3])
 ```
 
 To convert $\Delta E$ to kcal/mol, multiply by `23.060548`.
+
+### Faster inference
+
+`inference_settings` selects the compute path (also accepted by `load_model`):
+
+- **`"default"`** — the pure-torch reference path. Bit-for-bit identical to earlier releases.
+- **`"fast"`** — the block-diagonal SO2 GEMM backend plus TF32 matmuls and `torch.compile`.
+  - Recommended for compact models (eg. model1_compact)
+- **`"fast_gpu"`** — everything in `"fast"` **plus vendored Triton Wigner kernels** (CUDA-only;
+  `lmax==mmax==2`; install the optional `triton` via `pip install -e ".[gpu]"`, though it already
+  is inside the CUDA `torch` wheels). The loader auto-manages the MOLE merge by model:
+  - Recommended for MoLE models (eg. model1)
+
+```python
+# compact, any molecule:
+dE, dF = predict_solvation_energy((Z, R), checkpoint="model1_compact",
+                                  device="cuda", inference_settings="fast")
+# MoE model1
+dE, dF = predict_solvation_energy((Z, R), checkpoint="model1",
+                                  device="cuda", inference_settings="fast_gpu")
+```
+
+For full control, pass an `InferenceSettings` instead of a preset name (e.g. merged block-GEMM
+without Triton):
+
+```python
+from anisolv import InferenceSettings, predict_solvation_energy
+settings = InferenceSettings(execution_mode="umas_fast_pytorch", tf32=True, compile=True,
+                             merge_mole=True)  # MoE: merge -> block-GEMM + compile, single-composition
+dE, dF = predict_solvation_energy((Z, R), checkpoint="model1", device="cuda",
+                                  inference_settings=settings)
+```
+
+> **`torch.compile` caveat:** the first call is slow (graph capture) and a new molecule 
+> (element ratio) can trigger a recompile; if compilation fails the model falls back to eager
+> automatically. TF32 and `torch.compile` mainly help on GPU (TF32 is a no-op on CPU). 
+> The Triton `umas_fast_gpu` backend is GPU-only and (on the MoE model) single-composition.
 
 ## Sample scripts
 
@@ -150,10 +187,10 @@ python anisolv/samples/H2O_dGsolv.py         # full thermodynamic cycle: geometr
 
 ## Supported solvents
 
-The model is trained/validated on six solvents:
+The model is trained/validated on 21 solvents:
 
 - **Water** - reaches **SMD-level** accuracy.
-- **MeCN, MeOH, THF, CHCl3, DMSO** - **XTB-ALPB** accuracy.
+- **acetone, acetonitrile, aniline, benzaldehyde, benzene, ch2cl2 (dichloromethane), chcl3 (chloroform), cs2 (carbon disulfide), dioxane, dmf, dmso, ether (diethyl ether), ethylacetate, hexadecane, hexane, methanol, nitromethane, octanol, thf, toluene** - **XTB-ALPB** accuracy.
 
 Solvents are conditioned through a descriptor embedding; the additional entries in
 `_const/solvent_descriptors.json` are not validated targets.

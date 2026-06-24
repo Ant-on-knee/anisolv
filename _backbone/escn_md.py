@@ -932,8 +932,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self._inference_settings = settings
         self._merged_composition = None
 
-        # Validate settings against backend requirements (fail early)
-        self.backend.validate(self.lmax, self.mmax, settings)
+        # requirement: a MoE backbone (num_experts>0) must be merged for the fast backends; a non-MoE
+        # compact backbone is already plain-Linear and runs merge-free.
+        self.backend.validate(
+            self.lmax, self.mmax, settings, is_moe=getattr(self, "num_experts", 0) > 0
+        )
 
         if settings.merge_mole:
             assert (

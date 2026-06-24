@@ -26,6 +26,8 @@ dependencies = [
 samples = ["ase"]
 # Downloading the gated checkpoint from Hugging Face.
 hub = ["huggingface_hub"]
+# GPU Triton kernels for the fast_gpu
+gpu = ["triton>=3.4"]
 
 [project.urls]
 Repository = "https://github.com/Ant-on-knee/anisolv"
@@ -39,6 +41,7 @@ packages = [
     "anisolv._backbone._compat",
     "anisolv._backbone.common",
     "anisolv._backbone.nn",
+    "anisolv._backbone.triton",
 ]
 
 [tool.setuptools.package-data]

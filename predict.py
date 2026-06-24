@@ -11,6 +11,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
+from ._backbone._compat.inference import InferenceSettings, guess_inference_settings
 from .data import build_atomic_data
 from .model import default_checkpoint, load_model
 from .solvent import get_solvent_vector
@@ -19,11 +20,14 @@ _MODEL_CACHE: dict = {}
 
 _DEFAULT_SOLVENT = object()
 
-def _get_model(checkpoint, device, dtype, execution_mode):
-    key = (str(checkpoint), str(device), str(dtype), str(execution_mode))
+def _get_model(checkpoint, device, dtype, inference_settings):
+    # Resolve to the effective settings so the cache key reflects every knob (the backbone-aware
+    # downgrade in load_model is deterministic per checkpoint, which is already part of the key).
+    settings = guess_inference_settings(inference_settings)
+    key = (str(checkpoint), str(device), str(dtype), repr(settings))
     if key not in _MODEL_CACHE:
         _MODEL_CACHE[key] = load_model(checkpoint, device=device, dtype=dtype,
-                                       execution_mode=execution_mode)
+                                       inference_settings=settings)
     return _MODEL_CACHE[key]
 
 def _unwrap(x, key):
@@ -38,9 +42,9 @@ def predict_solvation_energy(
     checkpoint: str | None = None,
     device: str = "cpu",
     dtype: torch.dtype = torch.float32,
-    execution_mode: str = "general",
+    inference_settings: str | InferenceSettings = "default",
 ):
-    """Return (delta_energy_eV: float, delta_forces_eV_per_A: np.ndarray[n_atoms, 3]).
+    """Return (dEsolv (eV): float, dFsolv (eV/A): np.ndarray[n_atoms, 3]).
 
     atoms_or_arrays : an ase.Atoms, or a (atomic_numbers, positions[angstrom]) tuple.
     charge, spin    : total charge and spin multiplicity (defaults 0 / 1).
@@ -50,11 +54,15 @@ def predict_solvation_energy(
     checkpoint      : None (default; auto-selects 'model1' if its weights are present, else the
                       bundled 'model1_compact'), a checkpoint name, or a path to a converted .pt.
     dtype           : torch.float32 (default) or torch.float64.
-    execution_mode  : backbone backend.
+    inference_settings : 'default' (reference implementation), 
+                         'fast' (block-GEMM SO2 + tf32 + torch.compile, merge-free), 
+                         'fast_gpu' (adds Triton kernels; CUDA-only),
+                         or a custom InferenceSettings. 
+                         Recommended: use 'fast' for compact models and 'fast_gpu' for MoLE models
     """
     if checkpoint is None:
         checkpoint = default_checkpoint()
-    model = _get_model(checkpoint, device, dtype, execution_mode)
+    model = _get_model(checkpoint, device, dtype, inference_settings)
 
     if solvent is _DEFAULT_SOLVENT:
         solvent = "water"

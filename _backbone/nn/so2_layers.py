@@ -381,6 +381,7 @@ def convert_so2_conv1(
         "which means it was created with internal_weights=True."
     )
     device = old.fc_m0.weight.device
+    dtype = old.fc_m0.weight.dtype
     new = SO2_Conv1_WithRadialBlock(
         sphere_channels=old.sphere_channels,
         m_output_channels=old.m_output_channels,
@@ -389,11 +390,11 @@ def convert_so2_conv1(
         mappingReduced=old.mappingReduced,
         extra_m0_output_channels=old.extra_m0_output_channels,
         edge_channels_list=old.edge_channels_list,
-    )
+    ).to(device=device, dtype=dtype)
     new.load_state_dict(old.state_dict())
     for m_conv in new.so2_m_conv:
         m_conv._build_w_block()
-    return new.to(device)
+    return new
 
 
 def convert_so2_conv2(
@@ -414,17 +415,18 @@ def convert_so2_conv2(
         SO2_Conv2_InternalBlock with identical weights.
     """
     device = old.fc_m0.weight.device
+    dtype = old.fc_m0.weight.dtype
     new = SO2_Conv2_InternalBlock(
         sphere_channels=old.sphere_channels,
         m_output_channels=old.m_output_channels,
         lmax=old.lmax,
         mmax=old.mmax,
         mappingReduced=old.mappingReduced,
-    )
+    ).to(device=device, dtype=dtype)
     new.load_state_dict(old.state_dict())
     for m_conv in new.so2_m_conv:
         m_conv._build_w_block()
-    return new.to(device)
+    return new
 
 
 class SO2_Convolution(torch.nn.Module):
