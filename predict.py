@@ -8,8 +8,6 @@ output-gated so vacuum -> exactly 0).
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 import numpy as np
 import torch
 
@@ -22,12 +20,10 @@ _MODEL_CACHE: dict = {}
 
 _DEFAULT_SOLVENT = object()
 
-def _get_model(checkpoint, device, dtype, execution_mode, inference_settings):
+def _get_model(checkpoint, device, dtype, inference_settings):
     # Resolve to the effective settings so the cache key reflects every knob (the backbone-aware
     # downgrade in load_model is deterministic per checkpoint, which is already part of the key).
     settings = guess_inference_settings(inference_settings)
-    if execution_mode != "general":  # legacy override
-        settings = replace(settings, execution_mode=execution_mode)
     key = (str(checkpoint), str(device), str(dtype), repr(settings))
     if key not in _MODEL_CACHE:
         _MODEL_CACHE[key] = load_model(checkpoint, device=device, dtype=dtype,
@@ -46,10 +42,9 @@ def predict_solvation_energy(
     checkpoint: str | None = None,
     device: str = "cpu",
     dtype: torch.dtype = torch.float32,
-    execution_mode: str = "general",
     inference_settings: str | InferenceSettings = "default",
 ):
-    """Return (delta_energy_eV: float, delta_forces_eV_per_A: np.ndarray[n_atoms, 3]).
+    """Return (dEsolv (eV): float, dFsolv (eV/A): np.ndarray[n_atoms, 3]).
 
     atoms_or_arrays : an ase.Atoms, or a (atomic_numbers, positions[angstrom]) tuple.
     charge, spin    : total charge and spin multiplicity (defaults 0 / 1).
@@ -59,16 +54,15 @@ def predict_solvation_energy(
     checkpoint      : None (default; auto-selects 'model1' if its weights are present, else the
                       bundled 'model1_compact'), a checkpoint name, or a path to a converted .pt.
     dtype           : torch.float32 (default) or torch.float64.
-    inference_settings : 'default' (pure-torch reference) or 'fast' (block-GEMM SO2 + tf32 +
-                      torch.compile), or a custom InferenceSettings. 'fast' speeds up the compact
-                      model on any molecule; on the MoE 'model1' it auto-downgrades to general +
-                      tf32 (block-GEMM and torch.compile are unsafe on MoE). See load_model.
-    execution_mode  : legacy backbone-backend knob; overrides the preset's backend when not
-                      'general'.
+    inference_settings : 'default' (reference implementation), 
+                         'fast' (block-GEMM SO2 + tf32 + torch.compile, merge-free), 
+                         'fast_gpu' (adds Triton kernels; CUDA-only),
+                         or a custom InferenceSettings. 
+                         Recommended: use 'fast' for compact models and 'fast_gpu' for MoLE models
     """
     if checkpoint is None:
         checkpoint = default_checkpoint()
-    model = _get_model(checkpoint, device, dtype, execution_mode, inference_settings)
+    model = _get_model(checkpoint, device, dtype, inference_settings)
 
     if solvent is _DEFAULT_SOLVENT:
         solvent = "water"

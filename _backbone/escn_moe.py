@@ -85,7 +85,8 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         csd_mixed_emb = self.csd_embedding(
             charge=data["charge"],
             spin=data["spin"],
-            dataset=data["dataset"],
+            dataset=data.get("dataset", default=None),
+            solvent=data.get("solvent", default=None),
         )
         self.set_MOLE_coefficients(
             atomic_numbers_full=data["atomic_numbers"],
@@ -107,6 +108,8 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         # create a new non moe model and load weights into there
         new_model = eSCNMDBackbone(**self.parent_kwargs)
         new_model.load_state_dict(self.state_dict())
+        ref = next(self.parameters())
+        new_model = new_model.to(device=ref.device, dtype=ref.dtype)
         new_model.eval()
         return new_model
 

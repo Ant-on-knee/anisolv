@@ -7,8 +7,7 @@ forces. Given a molecular geometry and a solvent, it computes the difference bet
 
 ## What it does
 
-AniSolv is a solvation correction for molecular systems. It is an *additive correction*: it learns only the solvation
-contribution, which you layer onto the gas-phase potential of your choice (e.g. a universal MLIP):
+AniSolv is a solvation correction for molecular systems. It is an *additive correction*: it learns only the solvation contribution, which you layer onto the gas-phase potential of your choice (e.g. a universal MLIP):
 
 $$
 \begin{aligned}
@@ -146,30 +145,36 @@ To convert $\Delta E$ to kcal/mol, multiply by `23.060548`.
 
 - **`"default"`** — the pure-torch reference path. Bit-for-bit identical to earlier releases.
 - **`"fast"`** — the block-diagonal SO2 GEMM backend plus TF32 matmuls and `torch.compile`.
-  - On the compact model it is **composition-independent**, so it speeds up *any* molecule (the
-    biggest win is on GPU).
-  - On the MoE `model1` the block-GEMM conversion would require a fixed-composition MOLE merge, so
-    `"fast"` **auto-downgrades to the general backend** there, and `torch.compile` is disabled too
-    (the MOLE expert-routing side-channel is not `torch.compile`-safe across graph breaks). You
-    still get TF32, which is the main GPU win.
+  - Recommended for compact models (eg. model1_compact)
+- **`"fast_gpu"`** — everything in `"fast"` **plus vendored Triton Wigner kernels** (CUDA-only;
+  `lmax==mmax==2`; install the optional `triton` via `pip install -e ".[gpu]"`, though it already
+  is inside the CUDA `torch` wheels). The loader auto-manages the MOLE merge by model:
+  - Recommended for MoLE models (eg. model1)
 
 ```python
+# compact, any molecule:
 dE, dF = predict_solvation_energy((Z, R), checkpoint="model1_compact",
                                   device="cuda", inference_settings="fast")
+# MoE model1
+dE, dF = predict_solvation_energy((Z, R), checkpoint="model1",
+                                  device="cuda", inference_settings="fast_gpu")
 ```
 
-For full control, pass an `InferenceSettings` instead of a preset name:
+For full control, pass an `InferenceSettings` instead of a preset name (e.g. merged block-GEMM
+without Triton):
 
 ```python
 from anisolv import InferenceSettings, predict_solvation_energy
-settings = InferenceSettings(execution_mode="umas_fast_pytorch", tf32=True, compile=False)
-dE, dF = predict_solvation_energy((Z, R), checkpoint="model1_compact", inference_settings=settings)
+settings = InferenceSettings(execution_mode="umas_fast_pytorch", tf32=True, compile=True,
+                             merge_mole=True)  # MoE: merge -> block-GEMM + compile, single-composition
+dE, dF = predict_solvation_energy((Z, R), checkpoint="model1", device="cuda",
+                                  inference_settings=settings)
 ```
 
-> **`torch.compile` caveat:** the first call is slow (graph capture) and a new molecule *shape*
-> (atom/edge count) can trigger a recompile; if compilation fails the model falls back to eager
-> automatically. TF32 and `torch.compile` mainly help on GPU (TF32 is a no-op on CPU). The
-> GPU-only Triton backend (`umas_fast_gpu`) is not enabled yet.
+> **`torch.compile` caveat:** the first call is slow (graph capture) and a new molecule 
+> (element ratio) can trigger a recompile; if compilation fails the model falls back to eager
+> automatically. TF32 and `torch.compile` mainly help on GPU (TF32 is a no-op on CPU). 
+> The Triton `umas_fast_gpu` backend is GPU-only and (on the MoE model) single-composition.
 
 ## Sample scripts
 

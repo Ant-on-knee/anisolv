@@ -7,7 +7,6 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from dataclasses import replace
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -26,7 +25,6 @@ __all__ = [
     "UMASFastPytorchBackend",
     "UMASFastGPUBackend",
     "get_execution_backend",
-    "maybe_update_settings_backend",
 ]
 
 # Indices for m=0 spherical harmonic coefficients in L-major ordering (lmax=2)
@@ -65,6 +63,7 @@ class ExecutionBackend:
         lmax: int,
         mmax: int,
         settings: InferenceSettings,
+        is_moe: bool = False,
     ) -> None:
         """
         Validate that model parameters and settings are compatible with this backend.
@@ -273,11 +272,11 @@ class UMASFastPytorchBackend(ExecutionBackend):
         lmax: int,
         mmax: int,
         settings: InferenceSettings,
+        is_moe: bool = False,
     ) -> None:
         """
         Validate that settings are compatible with fast pytorch mode.
         """
-        # Also reject if user tries to enable it via inference settings
         if settings is not None and settings.activation_checkpointing:
             raise ValueError(
                 "UMASFastPytorchBackend requires activation_checkpointing=False"
@@ -342,14 +341,18 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         lmax: int,
         mmax: int,
         settings: InferenceSettings,
+        is_moe: bool = False,
     ) -> None:
-        UMASFastPytorchBackend.validate(lmax, mmax, settings)
+        UMASFastPytorchBackend.validate(lmax, mmax, settings, is_moe)
         if not torch.cuda.is_available():
             raise ValueError("umas_fast_gpu requires CUDA")
         if lmax != 2 or mmax != 2:
             raise ValueError("umas_fast_gpu requires lmax==2 and mmax==2")
-        if not settings.merge_mole:
-            raise ValueError("umas_fast_gpu requires merge_mole=True")
+        if is_moe and not settings.merge_mole:
+            raise ValueError(
+                "umas_fast_gpu on a MoE backbone requires merge_mole=True (the MOLE SO2 layers must "
+                "be merged to plain Linear first)"
+            )
 
     @staticmethod
     def prepare_wigner(
@@ -448,33 +451,3 @@ def get_execution_backend(
         available = [m.value for m in _EXECUTION_BACKENDS]
         raise ValueError(f"Unknown execution mode: {mode}. Available: {available}")
     return _EXECUTION_BACKENDS[mode]()
-
-
-def maybe_update_settings_backend(
-    settings: InferenceSettings,
-    model_config: dict,
-) -> InferenceSettings:
-    """
-    Update inference settings to use UMAS_FAST_GPU if conditions are met.
-
-    Sets execution_mode to UMAS_FAST_GPU if:
-    - execution_mode is not already set
-    - UMASFastGPUBackend.validate passes for the model and settings
-
-    Args:
-        settings: Current inference settings.
-        model_config: The model configuration dictionary to validate.
-
-    Returns:
-        Updated inference settings with the appropriate execution mode.
-    """
-    if settings.execution_mode is not None:
-        return settings
-
-    try:
-        lmax = model_config["backbone"]["lmax"]
-        mmax = model_config["backbone"]["mmax"]
-        UMASFastGPUBackend.validate(lmax, mmax, settings)
-        return replace(settings, execution_mode=ExecutionMode.UMAS_FAST_GPU)
-    except (ValueError, KeyError):
-        return settings

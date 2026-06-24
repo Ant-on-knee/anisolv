@@ -49,20 +49,15 @@ class InferenceSettings:
     auto_add_default_untrained_tasks: bool = True
 
 
-# Named presets, mirroring fairchem's NAME_TO_INFERENCE_SETTING WITHOUT importing fairchem.
-# "default" reproduces the legacy torch-only path bit-for-bit (general backend, no tf32/compile).
-# "fast" requests the block-GEMM backend plus tf32 + torch.compile. On MoE checkpoints the
-# standalone loader (model.py) downgrades execution_mode to "general" (the block-GEMM conversion
-# needs a MOLE merge first -- a fixed-composition path reserved for later) AND disables
-# torch.compile (the MOLE routing side-channel is not dynamo-safe across graph breaks); tf32 still
-# applies there. merge_mole stays False everywhere here, so every preset is composition-independent
-# and safe for multi-molecule callers.
 NAME_TO_INFERENCE_SETTING = {
     "default": InferenceSettings(
         execution_mode="general", tf32=False, compile=False, merge_mole=False
     ),
     "fast": InferenceSettings(
         execution_mode="umas_fast_pytorch", tf32=True, compile=True, merge_mole=False
+    ),
+    "fast_gpu": InferenceSettings(
+        execution_mode="umas_fast_gpu", tf32=True, compile=True, merge_mole=False
     ),
 }
 
