@@ -55,9 +55,14 @@ pip install "git+https://github.com/Ant-on-knee/anisolv.git"
 Optional extras:
 
 ```bash
-pip install -e ".[samples]"   # ASE - needed by the sample scripts
+pip install -e ".[ase]"       # ASE - geometry I/O for the sample scripts (alias of [samples])
 pip install -e ".[hub]"       # huggingface_hub - needed to download the weights (below)
 ```
+
+The single_point sample runs without ASE (bundled geometries are used as a fallback); 
+install the extra only if you want ASE's structures or `ase.Atoms` I/O. 
+For a published install the form is
+`pip install "anisolv[ase]"`.
 
 > **PyTorch note:** `pip` will pull a default `torch` build. For a specific CUDA/CPU build, install torch from [pytorch.org](https://pytorch.org/get-started/locally/) first, then install AniSolv.
 
