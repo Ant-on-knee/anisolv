@@ -99,3 +99,24 @@ def test_merged_composition_lock():
     except (AssertionError, RuntimeError, ValueError):
         return
     raise AssertionError("expected on_predict_check to reject a different composition")
+
+
+def test_merged_solvent_lock():
+    """A merged model raises if called on a different solvent.
+
+    The solvent vector is baked into the merge (csd_embedding) but is not part of the element
+    composition, so the lock must check it explicitly -- otherwise a merged model would silently
+    return wrong-solvent numbers when reused across solvents.
+    """
+    backbone, _ = _tiny_moe()
+    d0 = _data()  # merged on water (see _data)
+    merged = backbone.prepare_for_inference(d0, InferenceSettings(merge_mole=True))
+    merged.on_predict_check(d0)  # same solvent -> no raise
+
+    other = get_solvent_vector("acetonitrile", strict=False)
+    d1 = build_atomic_data((_NUMBERS, _POS), charge=0, spin=1, solvent=other, dtype=_DTYPE)
+    try:
+        merged.on_predict_check(d1)
+    except (AssertionError, RuntimeError, ValueError):
+        return
+    raise AssertionError("expected on_predict_check to reject a different solvent")

@@ -22,8 +22,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Sample scripts and ase.Atoms I/O.
 samples = ["ase"]
+ase = ["ase"]
 # Downloading the gated checkpoint from Hugging Face.
 hub = ["huggingface_hub"]
 # GPU Triton kernels for the fast_gpu
