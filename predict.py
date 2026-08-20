@@ -1,9 +1,9 @@
 """Public inference API: predict_solvation_energy -> (dE in eV, dF in eV/angstrom).
 
 dE = E_solv - E_gas is an additive correction: add it onto gas-phase
-potential's energy/forces. Uses the shipped model1 checkpoint 
-(trained on UMA-S-1.2, 64-expert MoLE + solvent embedding, 
-output-gated so vacuum -> exactly 0).
+potential's energy/forces. Auto-selects the best shipped checkpoint
+(model_smd > model1_compact; model_smd is UMA-S-1.2 64-expert MoLE +
+solvent embedding, output-gated so vacuum -> exactly 0).
 """
 
 from __future__ import annotations
@@ -51,8 +51,9 @@ def predict_solvation_energy(
     solvent         : solvent name (str), or None for the gas/vacuum baseline. Left unset it
                       defaults to 'water' (the repo's water-SMD target). The model is gated,
                       so solvent=None yields exactly zero dE/dF.
-    checkpoint      : None (default; auto-selects 'model1' if its weights are present, else the
-                      bundled 'model1_compact'), a checkpoint name, or a path to a converted .pt.
+    checkpoint      : None (default; auto-selects 'model_smd' if its weights are present,
+                      else the bundled 'model1_compact'), a checkpoint name, or a path to a
+                      converted .pt.
     dtype           : torch.float32 (default) or torch.float64.
     inference_settings : 'default' (reference implementation), 
                          'fast' (block-GEMM SO2 + tf32 + torch.compile, merge-free), 

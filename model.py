@@ -47,19 +47,19 @@ def tf32_context_manager():
         torch.backends.cudnn.allow_tf32 = old_cudnn
         torch.set_float32_matmul_precision(old_prec)
 
-# Default checkpoint selection. 'model1' (full-accuracy, gated UMA-derived weights) ships
-# separately and may be absent; 'model1_compact' (trained from scratch, ~25 MB) is bundled in
-# the repo, so it is always available as a fallback.
-_DEFAULT_CHECKPOINT = "model1"
-_FALLBACK_CHECKPOINT = "model1_compact"
+# Default checkpoint selection, in priority order. 'model_smd' (full-accuracy, gated UMA-derived
+# weights) ships separately and may be absent; 'model1_compact' (trained from scratch, ~25 MB) is
+# bundled in the repo and always available. ('model1' is deprecated: superseded by 'model_smd'.)
+_CHECKPOINT_PRIORITY = ("model_smd", "model1_compact")
 
 
 def default_checkpoint() -> str:
-    """Checkpoint used when the caller names none: 'model1' if its .pt is present in the
-    bundled models dir, else the always-present 'model1_compact' fallback."""
-    if (_CKPT_DIR / f"{_DEFAULT_CHECKPOINT}.pt").exists():
-        return _DEFAULT_CHECKPOINT
-    return _FALLBACK_CHECKPOINT
+    """Checkpoint used when the caller names none: the first of 'model_smd' > 
+    'model1_compact' whose .pt is present in the bundled models dir."""
+    for name in _CHECKPOINT_PRIORITY:
+        if (_CKPT_DIR / f"{name}.pt").exists():
+            return name
+    return _CHECKPOINT_PRIORITY[-1]
 
 
 def default_checkpoint_path() -> Path:
@@ -73,7 +73,7 @@ def print_default_checkpoint_path() -> None:
 
 _BACKBONES = {
     "eSCNMDBackbone": eSCNMDBackbone,        # non-MoE, solvent-conditioned (model1_compact)
-    "eSCNMDMoeBackbone": eSCNMDMoeBackbone,  # UMA-S-1.2 mixture-of-experts (model1, default)
+    "eSCNMDMoeBackbone": eSCNMDMoeBackbone,  # UMA-S-1.2 mixture-of-experts (model_smd)
 }
 _DEFAULT_BACKBONE = "eSCNMDMoeBackbone"
 
@@ -162,8 +162,8 @@ def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
                inference_settings: str | InferenceSettings = "default") -> AniSolvModel:
     """Build and load the standalone delta model from a converted checkpoint.
 
-    `checkpoint` is None (auto: 'model1' if its weights are present in anisolv/models, else the
-    bundled 'model1_compact'), a checkpoint name, or a path to a converted .pt. Returns an
+    `checkpoint` is None (auto: 'model_smd' if its weights are present in anisolv/models, else
+    the bundled 'model1_compact'), a checkpoint name, or a path to a converted .pt. Returns an
     AniSolvModel in eval mode on `device` with params cast to `dtype` (use torch.float64 for
     high-accuracy checks).
 
@@ -174,12 +174,14 @@ def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
     or a custom InferenceSettings (whose `execution_mode` field picks the backend).
 
     'fast'/'umas_fast_pytorch' is composition-independent on the non-MoE 'model1_compact'.
-    On the MoE 'model1' it would need a MOLE merge first, so it is downgraded to 'general' + tf32
+    On the MoE 'model_smd' it would need a MOLE merge first, so it is
+    downgraded to 'general' + tf32
 
-    'fast_gpu'/'umas_fast_gpu' (requires CUDA, lmax==mmax==2, triton) auto-manages the merge by backbone: 
-    compact models' performance remains identical to fast; 
-    'model1' is MOLE-merged so block-GEMM + Triton + torch.compile all apply, at the cost of locking to ONE
-    composition/charge/spin/solvent -- single molecule per loaded model (re-load to change it).
+    'fast_gpu'/'umas_fast_gpu' (requires CUDA, lmax==mmax==2, triton) auto-manages the merge by backbone:
+    compact models' performance remains identical to fast;
+    MoE checkpoints are MOLE-merged so block-GEMM + Triton + torch.compile all apply, at the cost of
+    locking to ONE composition/charge/spin/solvent -- single molecule per loaded model (re-load to
+    change it).
     """
     if checkpoint is None:
         checkpoint = default_checkpoint()

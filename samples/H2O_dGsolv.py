@@ -58,7 +58,7 @@ class AniSolvDeltaCalculator(Calculator):
 
     implemented_properties = ["energy", "forces"]
 
-    def __init__(self, checkpoint="model1", device="cpu", dtype=None,
+    def __init__(self, checkpoint=None, device="cpu", dtype=None,
                  default_solvent="water", **kwargs):
         super().__init__(**kwargs)
         import torch
