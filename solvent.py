@@ -11,6 +11,7 @@ import functools
 import json
 import logging
 import math
+import re
 from pathlib import Path
 
 import torch
@@ -47,6 +48,177 @@ def _transform(name: str, value: float) -> float:
 
 _VACUUM_NAMES = {"", "vacuum", "gas", "gas_phase", "gas-phase", "none"}
 
+_ALIASES = {
+    # abbreviations
+    "dmso": "dimethyl sulfoxide (DMSO)",
+    "dimethylsulfoxide": "dimethyl sulfoxide (DMSO)",
+    "dimethyl sulphoxide": "dimethyl sulfoxide (DMSO)",
+    "dmf": "N,N-dimethylformamide",
+    "dimethylformamide": "N,N-dimethylformamide",
+    "dmac": "N,N-dimethylacetamide",
+    "dimethylacetamide": "N,N-dimethylacetamide",
+    "nmf": "N-methylformamide (E/Z mixture)",
+    "thf": "tetrahydrofuran",
+    "dcm": "dichloromethane",
+    "methylene chloride": "dichloromethane",
+    "dce": "1,2-dichloroethane",
+    "dichloroethane": "1,2-dichloroethane",
+    "ethylene dichloride": "1,2-dichloroethane",
+    "ccl4": "carbon tetrachloride",
+    "tetrachloromethane": "carbon tetrachloride",
+    "cs2": "carbon disulfide",
+    "meoh": "methanol",
+    "etoh": "ethanol",
+    "ipa": "2-propanol",
+    "mecn": "acetonitrile",
+    "acn": "acetonitrile",
+    "h2o": "water",
+    "tbp": "tributylphosphate",
+    "tributyl phosphate": "tributylphosphate",
+    "dipe": "diisopropyl ether",
+    "mek": "butanone",
+    "methyl ethyl ketone": "butanone",
+    "2-butanone": "butanone",
+    "mibk": "4-methyl-2-pentanone",
+    "methyl isobutyl ketone": "4-methyl-2-pentanone",
+    "etoac": "ethyl ethanoate",
+    "sulfolane": "tetrahydrothiophene-S,S-dioxide",
+    "tetramethylene sulfone": "tetrahydrothiophene-S,S-dioxide",
+    "dioxane": "1,4-dioxane",
+    "ether": "diethyl ether",
+    "diethylether": "diethyl ether",
+    "ethoxyethane": "diethyl ether",
+    "di-n-butyl ether": "dibutyl ether",
+    "isooctane": "2,2,4-trimethylpentane",
+
+    # n-alkanes: the table carries the "n-" prefix, the bare name is universal
+    "pentane": "n-pentane",
+    "hexane": "n-hexane",
+    "heptane": "n-heptane",
+    "octane": "n-octane",
+    "nonane": "n-nonane",
+    "decane": "n-decane",
+    "undecane": "n-undecane",
+    "dodecane": "n-dodecane",
+    "pentadecane": "n-pentadecane",
+    "hexadecane": "n-hexadecane",
+    "butylbenzene": "n-butylbenzene",
+    "cetane": "n-hexadecane",
+
+    # alcohols: bare name, "n-" form, and the IUPAC "-an-N-ol" form
+    "propanol": "1-propanol", "n-propanol": "1-propanol", "propan-1-ol": "1-propanol",
+    "butanol": "1-butanol", "n-butanol": "1-butanol", "butan-1-ol": "1-butanol",
+    "pentanol": "1-pentanol", "n-pentanol": "1-pentanol", "pentan-1-ol": "1-pentanol",
+    "amyl alcohol": "1-pentanol",
+    "hexanol": "1-hexanol", "hexan-1-ol": "1-hexanol",
+    "heptanol": "1-heptanol", "heptan-1-ol": "1-heptanol",
+    "octanol": "1-octanol", "octan-1-ol": "1-octanol",
+    "nonanol": "1-nonanol", "nonan-1-ol": "1-nonanol",
+    "decanol": "1-decanol", "decan-1-ol": "1-decanol",
+    "isopropanol": "2-propanol", "isopropyl alcohol": "2-propanol",
+    "propan-2-ol": "2-propanol",
+    "sec-butanol": "2-butanol", "s-butanol": "2-butanol", "butan-2-ol": "2-butanol",
+    "tert-butanol": "2-methyl-2-propanol", "t-butanol": "2-methyl-2-propanol",
+    "tert-butyl alcohol": "2-methyl-2-propanol",
+    "2-methylpropan-2-ol": "2-methyl-2-propanol",
+    "isobutanol": "2-methyl-1-propanol", "isobutyl alcohol": "2-methyl-1-propanol",
+    "2-methylpropan-1-ol": "2-methyl-1-propanol",
+    "ethylene glycol": "1,2-ethanediol", "ethane-1,2-diol": "1,2-ethanediol",
+    "monoethylene glycol": "1,2-ethanediol", "glycol": "1,2-ethanediol",
+    "allyl alcohol": "2-propen-1-ol", "prop-2-en-1-ol": "2-propen-1-ol",
+    "trifluoroethanol": "2,2,2-trifluoroethanol", "tfe": "2,2,2-trifluoroethanol",
+    "methoxyethanol": "2-methoxyethanol", "methyl cellosolve": "2-methoxyethanol",
+
+    # esters: table uses ethanoate/methanoate/propanoate/butanoate
+    "methyl acetate": "methyl ethanoate",
+    "ethyl acetate": "ethyl ethanoate",
+    "propyl acetate": "propyl ethanoate", "n-propyl acetate": "propyl ethanoate",
+    "butyl acetate": "butyl ethanoate", "n-butyl acetate": "butyl ethanoate",
+    "pentyl acetate": "pentyl ethanoate", "amyl acetate": "pentyl ethanoate",
+    "methyl formate": "methyl methanoate",
+    "ethyl formate": "ethyl methanoate",
+    "methyl propionate": "methyl propanoate",
+    "methyl butyrate": "methyl butanoate",
+
+    # ketones
+    "pentan-2-one": "2-pentanone",
+    "pentan-3-one": "3-pentanone", "diethyl ketone": "3-pentanone",
+    "hexan-2-one": "2-hexanone",
+    "heptan-2-one": "2-heptanone",
+    "octan-2-one": "2-octanone",
+    "heptan-4-one": "4-heptanone", "dipropyl ketone": "4-heptanone",
+    "nonan-5-one": "5-nonanone", "dibutyl ketone": "5-nonanone",
+    "4-methylpentan-2-one": "4-methyl-2-pentanone",
+
+    # nitriles
+    "propionitrile": "propanonitrile", "propiononitrile": "propanonitrile",
+    "butyronitrile": "butanonitrile",
+
+    # acids and aldehydes
+    "ethanoic acid": "acetic acid",
+    "methanoic acid": "formic acid",
+    "propionic acid": "propanoic acid",
+    "butyric acid": "butanoic acid",
+    "valeric acid": "pentanoic acid",
+    "caproic acid": "hexanoic acid",
+    "propionaldehyde": "propanal",
+    "butyraldehyde": "butanal",
+    "valeraldehyde": "pentanal",
+
+    # amines and aromatics
+    "phenylamine": "aniline", "aminobenzene": "aniline",
+    "n-butylamine": "butylamine",
+    "n-propylamine": "propylamine",
+    "n-pentylamine": "pentylamine",
+    "2-picoline": "2-methylpyridine", "alpha-picoline": "2-methylpyridine",
+    "3-picoline": "3-methylpyridine", "beta-picoline": "3-methylpyridine",
+    "4-picoline": "4-methylpyridine", "gamma-picoline": "4-methylpyridine",
+    "2,4-lutidine": "2,4-dimethylpyridine",
+    "2,6-lutidine": "2,6-dimethylpyridine",
+    "cumene": "isopropylbenzene",
+    "p-cymene": "p-isopropyltoluene",
+    "1,3,5-trimethylbenzene": "mesitylene",
+    "pseudocumene": "1,2,4-trimethylbenzene",
+    "methoxybenzene": "anisole",
+    "phenetole": "ethyl phenyl ether", "ethoxybenzene": "ethyl phenyl ether",
+    "benzyl chloride": "alpha-chlorotoluene",
+    "hexafluorobenzene": "perfluorobenzene",
+    "1,2,3,4-tetrahydronaphthalene": "tetralin",
+    "decahydronaphthalene": "decalin (cis/trans mixture)",
+    "2-methylphenol": "o-cresol",
+    "3-methylphenol": "m-cresol",
+    "2-nitrotoluene": "o-nitrotoluene",
+    "2-chlorotoluene": "o-chlorotoluene",
+    "1,2-dichlorobenzene": "o-dichlorobenzene",
+
+    # halogenated
+    "trichloroethylene": "trichloroethene",
+    "tetrachloroethylene": "tetrachloroethene",
+    "perchloroethylene": "tetrachloroethene",
+    "trichloromethane": "chloroform",
+    "tribromomethane": "bromoform",
+    "methyl iodide": "iodomethane",
+    "ethyl iodide": "iodoethane",
+    "methylene iodide": "diiodomethane",
+    "methylene bromide": "dibromomethane",
+    "ethyl bromide": "bromoethane",
+    "methyl chloroform": "1,1,1-trichloroethane",
+    "ethylene dibromide": "1,2-dibromoethane",
+    "isobutyl bromide": "1-bromo-2-methylpropane",
+    "isopropyl bromide": "2-bromopropane",
+    "n-propyl bromide": "1-bromopropane",
+    "trans-1,2-dichloroethene": "E-1,2-dichloroethene",
+    "cis-1,2-dichloroethene": "Z-1,2-dichloroethene",
+
+    # sulfur
+    "ethyl mercaptan": "ethanethiol",
+
+    # alkenes
+    "trans-2-pentene": "E-2-pentene",
+}
+
+_RACEMIC_PREFIXES = ("(+/-)-", "(+-)-", "(±)-", "(rs)-", "rac-", "dl-", "d,l-")
+
 
 @functools.lru_cache(maxsize=1)
 def _load_raw() -> dict:
@@ -54,15 +226,73 @@ def _load_raw() -> dict:
         return json.load(f)
 
 
+def _norm(name) -> str:
+    """Fold a user-supplied solvent name to its lookup form.
+
+    Case, surrounding/repeated whitespace and a racemic prefix carry no chemical meaning,
+    so none of them should decide whether a lookup succeeds.
+    """
+    s = " ".join(str(name).strip().lower().split())
+    for pre in _RACEMIC_PREFIXES:
+        if s.startswith(pre):
+            return s[len(pre):].lstrip("- ")
+    return s
+
+
 @functools.lru_cache(maxsize=1)
 def _solvents_ci() -> dict:
-    """Case-insensitive index of the solvent table (some keys carry uppercase, e.g.
+    """Normalized index of the solvent table (some keys carry uppercase, e.g.
     'dimethyl sulfoxide (DMSO)', 'N,N-dimethylformamide', 'E-1,2-dichloroethene')."""
-    return {k.lower(): v for k, v in _load_raw()["solvents"].items()}
+    return {_norm(k): v for k, v in _load_raw()["solvents"].items()}
+
+
+@functools.lru_cache(maxsize=1)
+def _canon_ci() -> dict:
+    """Normalized name -> the table's own spelling of it."""
+    return {_norm(k): k for k in _load_raw()["solvents"]}
+
+
+@functools.lru_cache(maxsize=1)
+def _alias_ci() -> dict:
+    """Normalized alias -> canonical table key, dropping any alias that would shadow a
+    real solvent name (a table name must always win) or point at a missing key."""
+    table = _load_raw()["solvents"]
+    real = {_norm(k) for k in table}
+    out = {}
+    for alias, target in _ALIASES.items():
+        a = _norm(alias)
+        if a in real or target not in table:
+            continue
+        out[a] = target
+    for key in table:
+        stem = _norm(re.sub(r"\s*\([^)]*\)\s*$", "", key))
+        if stem and stem not in real and stem not in out:
+            out[stem] = key
+    return out
+
+
+def resolve_solvent_name(name):
+    """Canonical table key for a solvent name or accepted alias; None if unrecognized.
+
+    Case-insensitive. Returns "" for vacuum/gas-phase and None for unknown names, so
+    callers can tell "explicitly no solvent" from "I don't know this one".
+    """
+    if name is None:
+        return ""
+    key = _norm(name)
+    if key in _VACUUM_NAMES:
+        return ""
+    canon = _canon_ci().get(key)
+    return canon if canon is not None else _alias_ci().get(key)
 
 
 def list_solvents() -> list:
     return sorted(_load_raw()["solvents"].keys())
+
+
+def list_aliases() -> dict:
+    """Accepted alias -> canonical solvent name."""
+    return dict(sorted(_alias_ci().items()))
 
 
 def normalize(raw_vec) -> list:
@@ -79,15 +309,19 @@ def get_solvent_vector(solvent_name, strict: bool = True) -> torch.Tensor:
     vec = torch.zeros(1, SOLVENT_DIM, dtype=torch.float32)
     if solvent_name is None:
         return vec
-    key = str(solvent_name).strip().lower()
+    key = _norm(solvent_name)
     if key in _VACUUM_NAMES:
         return vec
     solvents = _solvents_ci()
     if key not in solvents:
+        alias = _alias_ci().get(key)
+        if alias is not None:
+            key = _norm(alias)
+    if key not in solvents:
         if strict:
             raise KeyError(
                 f"Unknown solvent '{solvent_name}'. Use strict=False for the vacuum "
-                f"vector, or see list_solvents()."
+                f"vector, or see list_solvents() / list_aliases()."
             )
         logging.warning("Unknown solvent '%s'; using the vacuum vector.", solvent_name)
         return vec
