@@ -985,6 +985,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             getattr(data, "charge", None),
             getattr(data, "spin", None),
             getattr(data, "dataset", [None]),
+            getattr(data, "solvent", None),
         )
 
     def _assert_composition_matches(self, current: tuple) -> None:
@@ -1028,6 +1029,21 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ), f"Spin differs: {merged_spin} vs {current[2]}"
 
         assert merged[3] == current[3], f"Dataset differs: {merged[3]} vs {current[3]}"
+
+        merged_solvent, curr_solvent = merged[4], current[4]
+        merged_is_t = isinstance(merged_solvent, torch.Tensor)
+        curr_is_t = isinstance(curr_solvent, torch.Tensor)
+        if merged_is_t and curr_is_t:
+            curr_solvent = curr_solvent.to(device)
+            solvent_ok = (
+                merged_solvent.shape == curr_solvent.shape
+                and merged_solvent.float()
+                .isclose(curr_solvent.float(), rtol=1e-5)
+                .all()
+            )
+        else:
+            solvent_ok = (not merged_is_t) and (not curr_is_t) and merged_solvent == curr_solvent
+        assert solvent_ok, f"Solvent differs from merged model: {merged_solvent} vs {current[4]}"
 
     def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """
