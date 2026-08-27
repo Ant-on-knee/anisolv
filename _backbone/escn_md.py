@@ -379,8 +379,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.use_solvent_embedding = use_solvent_embedding
         self.solvent_emb_grad = solvent_emb_grad
         self.solvent_emb_hidden = solvent_emb_hidden
-        # Multiply predicted energy (and hence autograd forces) by the
-        # solvent-present mask, so vacuum input -> exactly zero delta.
         self.solvent_output_gate = solvent_output_gate
         if self.use_dataset_embedding:
             self.dataset_mapping = resolve_dataset_mapping(
@@ -391,13 +389,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         for l in range(self.lmax + 1):
             self.register_buffer(f"Jd_{l}", Jd_list[l])
 
-        # The quaternion Wigner path is NOT vendored in anisolv (it pulls in ~1800 LOC
-        # under common/quaternion/). Phase-0B verified the Euler/Jd path is numerically
-        # equivalent (machine-eps in float64), so the standalone always uses Euler.
+        # The quaternion Wigner path is not in anisolv
         if self.use_quaternion_wigner:
             raise RuntimeError(
                 "use_quaternion_wigner=True is unsupported in standalone anisolv; "
-                "the Euler/Jd path (use_quaternion_wigner=False) is the vendored, "
+                "the Euler/Jd path (use_quaternion_wigner=False) is the included "
                 "verified-equivalent rotation path."
             )
 
@@ -583,10 +579,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        # Euler/Jd rotation path only (quaternion path not vendored; see __init__).
+        # Euler/Jd rotation path only (the quaternion path is not included; see __init__).
         # gamma is pinned to 0 in init_edge_rot_euler_angles, making this deterministic;
-        # eSCN is azimuth-invariant so this matches the production model exactly
-        # (verified in Phase 0A/0B).
+        # eSCN is azimuth-invariant so this matches the production model exactly.
         Jd_buffers = [
             getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
             for l in range(self.lmax + 1)
@@ -1166,10 +1161,6 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         )
 
         if self.solvent_output_gate:
-            # Gate the per-graph energy by the solvent-present mask (last channel
-            # of the solvent vector) BEFORE the autograd force computation, so
-            # vacuum systems get exactly zero energy AND forces while keeping
-            # F = -dE/dr consistent (the mask is constant w.r.t. positions).
             mask = data["solvent"][:, -1].to(energy.dtype)
             energy = energy * mask
             energy_part = energy_part * mask

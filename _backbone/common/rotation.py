@@ -52,10 +52,6 @@ def init_edge_rot_euler_angles(edge_distance_vec):
     # longitude (alpha)
     alpha = Safeatan2.apply(x.squeeze(-1), z.squeeze(-1))
 
-    # gamma (roll) is PINNED TO 0 in standalone anisolv (fairchem samples a random roll
-    # for SO(2) symmetry-breaking during training). eSCN is exactly azimuth-invariant at
-    # inference (Phase 0A: bit-identical output across gamma in float64), so gamma=0
-    # reproduces the production model deterministically.
     gamma = torch.zeros_like(alpha)
     # intrinsic to extrinsic swap
     return -gamma, -beta, -alpha

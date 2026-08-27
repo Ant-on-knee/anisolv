@@ -1,12 +1,10 @@
-"""Sample: hydration free energies (dG_solv in water) via the anisolv delta-corrector.
+"""Sample: single-point hydration free energies (dE_solv in water) via the anisolv.
 
 takes a handful of small solutes, obtains the water solvation correction, and reports it against
 experimental hydration free energies.
 
-Run from the repo root (torch + numpy; ASE is optional -- bundled g2 geometries are used as a
-fallback when ASE is not installed; uses the default checkpoint in anisolv/models):
-
-    python anisolv/samples/H2O_single_point.py
+    python anisolv/samples/H2O_single_point.py                              # auto: model_smd > model1_compact
+    python anisolv/samples/H2O_single_point.py --checkpoint model1_compact  # or a name / path to a .pt
 
 To use ASE's geometries instead of the bundled fallback, install the optional extra:
 
@@ -18,6 +16,7 @@ H2O, see the companion H2O_dGsolv.py.
 
 from __future__ import annotations
 
+import argparse
 import math
 import sys
 from pathlib import Path
@@ -33,13 +32,11 @@ except ImportError:  # ASE is optional -- fall back to the bundled geometries in
     molecule = None
     HAVE_ASE = False
 
-from anisolv import predict_solvation_energy  # noqa: E402
+from anisolv import default_checkpoint_path, predict_solvation_energy  # noqa: E402
 
 EV_TO_KCAL = 23.060548  # 1 eV in kcal/mol
 
-# (ASE g2 name, label, experimental dG_hyd in kcal/mol). 
-# Experimental hydration free energies from the FreeSolv / MNSol compilations. 
-# All neutral closed-shell singlets, so charge=0, spin=1 (the predict defaults).
+# (ASE name, label, experimental dG_hyd in kcal/mol). 
 SOLUTES = [
     ("CH4",   "methane",      +1.99),
     ("C2H6",  "ethane",       +1.83),
@@ -94,7 +91,7 @@ _FALLBACK_GEOM = {
 
 
 def _resolve(name: str):
-    """Return (atomic_numbers, positions[angstrom], Hill formula) for a g2 solute.
+    """Return (atomic_numbers, positions[angstrom], chemical formula) for a g2 solute.
 
     Uses ASE's g2 geometry when ASE is importable, otherwise the bundled fallback above.
     """
@@ -109,11 +106,20 @@ def _resolve(name: str):
     return _FALLBACK_GEOM[name]
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description="single-point hydration dG of small solutes via anisolv")
+    ap.add_argument("--checkpoint", default=None,
+                    help="checkpoint name or path to a .pt (default: auto, model_smd > model1_compact)")
+    ap.add_argument("--device", default="cpu", help="torch device: cpu (default), cuda, or mps")
+    args = ap.parse_args(argv)
+    ckpt_label = args.checkpoint or f"{default_checkpoint_path().stem} (auto-selected)"
+    kw = dict(checkpoint=args.checkpoint, device=args.device)
+
     z0, r0, _ = _resolve("H2O")
-    dE0, _ = predict_solvation_energy((z0, r0), solvent=None)
+    dE0, _ = predict_solvation_energy((z0, r0), solvent=None, **kw)
     assert dE0 == 0.0, f"vacuum baseline not zero: {dE0} eV"
     print(f"[check] vacuum baseline dE(H2O, solvent=None) = {dE0:.1f} eV  (expected exactly 0)")
+    print(f"[info]  checkpoint: {ckpt_label}   device: {args.device}")
     print(f"[info]  geometry source: {'ASE g2' if HAVE_ASE else 'bundled fallback (ASE not found)'}\n")
 
     print(f"{'solute':14s} {'formula':10s} {'n':>3} "
@@ -121,14 +127,15 @@ def main() -> int:
     errs = []
     for g2_name, label, dG_exp in SOLUTES:
         numbers, positions, formula = _resolve(g2_name)
-        dE_eV, _dF = predict_solvation_energy((numbers, positions), charge=0, spin=1, solvent="water")
+        dE_eV, _dF = predict_solvation_energy((numbers, positions), charge=0, spin=1,
+                                              solvent="water", **kw)
         dG_pred = dE_eV * EV_TO_KCAL
         err = dG_pred - dG_exp
         errs.append(err)
         print(f"{label:14s} {formula:10s} {len(numbers):3d} "
               f"{dG_pred:+9.2f} {dG_exp:+9.2f} {err:+9.2f}")
 
-    # Error summary, same statistics run_mnsol._summarize reports.
+    # Error summary (MAE / RMSE / bias vs. experiment); uncomment to print.
     # n = len(errs)
     # mae = sum(abs(e) for e in errs) / n
     # rmse = math.sqrt(sum(e * e for e in errs) / n)

@@ -1,42 +1,32 @@
 <h1 align="center">AniSolv</h1>
-<p align="center"><em>A solvation model for machine-learning interatomic potentials.</em></p>
+<p align="center"><em>MLIP Implicit Solvation with DFT Accuracy</em></p>
 
-AniSolv predicts an **additive solvation correction** - an energy term $\Delta E$ and force
-term $\Delta F$ - that you add on top of *any* gas-phase potential to get solvated energies and
-forces. Given a molecular geometry and a solvent, it computes the difference between the solvated and gas-phase electronic energy.
-
-## What it does
-
-AniSolv is a solvation correction for molecular systems. It is an *additive correction*: it learns only the solvation contribution, which you layer onto the gas-phase potential of your choice (e.g. a universal MLIP):
+AniSolv predicts the single-point solvation energy: it produces a solvation energy $\Delta E$ and the associated force correction $\Delta F$, which can be added to any gas-phase potential (MLIP or DFT) to obtain solvated energies and forces. AniSolv is trained on molecular systems.
 
 $$
 \begin{aligned}
-E_{\text{solvated}} &= E_{\text{gas}}\,(\text{your potential}) + \Delta E_{\text{anisolv}} \\
-F_{\text{solvated}} &= F_{\text{gas}}\,(\text{your potential}) + \Delta F_{\text{anisolv}}
+E_{\text{solvated}} &= E_{\text{gas}} + \Delta E_{\text{anisolv}} \\
+F_{\text{solvated}} &= F_{\text{gas}} + \Delta F_{\text{anisolv}}
 \end{aligned}
 $$
 
-where $\Delta E = E_{\text{solv}} - E_{\text{gas}}$. Key properties:
+where $\Delta E = E_{\text{solv}} - E_{\text{gas}}$. 
 
-- **Pair it with a base potential.** The delta alone has no bound minimum - always combine it with a gas-phase potential for geometry optimization or vibrational calculation.
-- **Lightweight at inference.** Runs on **PyTorch + NumPy only** (ASE is optional, for structure I/O).
+Key properties:
+- **Can be paired with any base potential.** 
+- **Lightweight at inference.** Models are optimized for inference speed.
 
 ### Model(s)
 
-Two checkpoints are available, both with a per-system **solvent embedding** and an **output gate**
-(vacuum → exactly 0). `load_model` / `predict_solvation_energy` auto-select the backbone from the
-checkpoint, so you switch models purely via `checkpoint=`:
+Two checkpoints are supported, in this order of preference: **`model_smd` > `model1_compact`**. Both carry a per-system **solvent embedding** and an **output gate** (vacuum → exactly 0).
+`load_model` / `predict_solvation_energy` auto-select the backbone from the checkpoint, so one can easily change models by specifying `checkpoint=`:
 
-- **`model1`** (default when present) — a 64-expert MoLE `eSCNMDMoeBackbone` (~291 M params), the
-  full-accuracy model. **Warmstarted from Meta's UMA `uma-s-1p2`** and fine-tuned on a solvation
-  free-energy correction objective. Its weights are gated and **not** in this repo (see below).
-- **`model1_compact`** — a non-MoE `eSCNMDBackbone` (~6.4 M params, ~25 MB) for fast / low-memory
-  inference, same solvent-conditioning and gate. Trained from scratch (not UMA-derived), so it is
-  **MIT-licensed and bundled in this repo** at `models/model1_compact.pt` — no download needed.
+- **`model_smd`** (default when present) — a 64-expert MoE `eSCNMDMoeBackbone` (~291 M params), the full-accuracy model, trained against SMD reference solvation data. **Initialized from Meta's UMA `uma-s-1p2`**; the weights must be downloaded from Hugging Face (see below).
+- **`model1_compact`** — a dense GNN (~6.4 M params, ~25 MB) for fast / low-memory inference, with the same solvent conditioning and gate. Trained from scratch (not UMA-derived) and already included in this repo.
 
-Leaving `checkpoint` unset (`None`) auto-selects `model1` when its weights are present and otherwise
-falls back to the bundled `model1_compact`, so the package runs out of the box. Because `model1`
-derives from UMA, its **weights are released under the FAIR Chemistry License** (see [License](#license)).
+Leaving `checkpoint` unset (`None`) auto-selects `model_smd` when its weights are present and otherwise falls back to the bundled `model1_compact`.
+
+> **Deprecated:** all other checkpoints (e.g. the earlier MoE `model1`) are superseded by `model_smd`, which outperforms them across the board. They are unsupported and not recognized by name; if you still have one, load it by explicit path (`checkpoint="/path/to/model1.pt"`).
 
 ## Installation
 
@@ -59,20 +49,16 @@ pip install -e ".[ase]"       # ASE - geometry I/O for the sample scripts (alias
 pip install -e ".[hub]"       # huggingface_hub - needed to download the weights (below)
 ```
 
-The single_point sample runs without ASE (bundled geometries are used as a fallback); 
-install the extra only if you want ASE's structures or `ase.Atoms` I/O. 
-For a published install the form is
-`pip install "anisolv[ase]"`.
+The single_point sample runs without ASE; install the extra only if you want ASE's structures or `ase.Atoms` I/O. 
+For a non-editable (PyPI) install, use `pip install "anisolv[ase]"`.
 
 > **PyTorch note:** `pip` will pull a default `torch` build. For a specific CUDA/CPU build, install torch from [pytorch.org](https://pytorch.org/get-started/locally/) first, then install AniSolv.
 
-## Download the model weights (gated)
+## Download the model weights
 
-The trained checkpoint **`model1.pt` (~1.1 GB) is not in this repository** - it is git-ignored and
-distributed separately on Hugging Face under the **FAIR Chemistry License**.
+The trained checkpoint **`model_smd.pt` (~1.1 GB) is not in this repository** - it is git-ignored and distributed separately on Hugging Face.
 
-**1. Request access.** Go to **https://huggingface.co/antonknee/anisolv** and accept the FAIR
-Chemistry License. You must provide your full legal name, date of birth, and organization.
+**1. Request access.** Go to **https://huggingface.co/antonknee/anisolv** and accept the FAIR Chemistry License. You must provide your full legal name, date of birth, and organization.
 
 **2. Authenticate.**
 
@@ -83,29 +69,24 @@ hf auth login                  # paste a token from https://huggingface.co/setti
 
 **3. Download the checkpoint.**
 
-- **If you cloned the repo and installed with `pip install -e .`**, drop it where the default
-  auto-selection looks (`models/model1.pt` under the package root). Run this from the repo root:
+- **If you cloned the repo and installed with `pip install -e .`**, drop it into the `models` directory:
 
   ```bash
-  hf download antonknee/anisolv model1.pt --local-dir models
+  hf download antonknee/anisolv model_smd.pt --local-dir models
   ```
 
-- **If you installed with a plain `pip install`** (from PyPI or `pip install git+…`), 
-  download it to any directory you control and pass its **absolute path** at call time. Until you do,
-  the bundled `model1_compact` stays the default, so the package still works:
+- **If you installed with a plain `pip install`** (from PyPI or `pip install git+…`), download it to any directory you control and pass its **absolute path** at call time. Until you do, the bundled `model1_compact` remains the default:
 
   ```bash
-  hf download antonknee/anisolv model1.pt --local-dir /path/to/anisolv-weights
+  hf download antonknee/anisolv model_smd.pt --local-dir /path/to/anisolv-weights
   ```
 
   ```python
   from anisolv import predict_solvation_energy
-  predict_solvation_energy(..., checkpoint="/path/to/anisolv-weights/model1.pt")  # absolute path
+  predict_solvation_energy(..., checkpoint="/path/to/anisolv-weights/model_smd.pt")  # absolute path
   ```
 
-> **License note:** these weights are a derivative of Meta's UMA (`uma-s-1p2`) and are governed by
-> the **FAIR Chemistry License - not MIT**. The MIT license in this repo covers the *inference code
-> only* and does not extend to the weights.
+> **License note:** these weights are a derivative of Meta's UMA (`uma-s-1p2`) and are governed by the **FAIR Chemistry License - not MIT**. The MIT license in this repo covers the *inference code only* and does not extend to the weights.
 
 ## Quickstart
 
@@ -131,14 +112,14 @@ assert dE0 == 0.0
 
 ```python
 predict_solvation_energy(
-    atoms_or_arrays,            # ase.Atoms, or a (atomic_numbers, positions[angstrom]) tuple
+    atoms_or_arrays,           # ase.Atoms, or a (atomic_numbers, positions[angstrom]) tuple
     charge: int = 0,           # total charge
     spin: int = 1,             # spin multiplicity
-    solvent="water",           # solvent name (str), or None for the vacuum baseline (-> exactly 0)
-    checkpoint: str = "model1",# "model1" (default) / "model1_compact", or a path to a .pt
+    solvent="water",           # solvent name (str), or None for vacuum (-> exactly 0)
+    checkpoint: str = None,    # auto: "model_smd" > "model1_compact"; or a name / path to a .pt
     device: str = "cpu",       # "cpu", "cuda", or "mps"
     dtype=torch.float32,       # torch.float32 (default) or torch.float64
-    inference_settings="default",  # "default" (reference) or "fast" (see below)
+    inference_settings="default",  # "default" (reference), "fast", or "fast_gpu" (see below)
 ) -> tuple[float, np.ndarray]  # (dE in eV, dF in eV/angstrom with shape [n_atoms, 3])
 ```
 
@@ -150,18 +131,16 @@ To convert $\Delta E$ to kcal/mol, multiply by `23.060548`.
 
 - **`"default"`** — the pure-torch reference path. Bit-for-bit identical to earlier releases.
 - **`"fast"`** — the block-diagonal SO2 GEMM backend plus TF32 matmuls and `torch.compile`.
-  - Recommended for compact models (eg. model1_compact)
-- **`"fast_gpu"`** — everything in `"fast"` **plus vendored Triton Wigner kernels** (CUDA-only;
-  `lmax==mmax==2`; install the optional `triton` via `pip install -e ".[gpu]"`, though it already
-  is inside the CUDA `torch` wheels). The loader auto-manages the MOLE merge by model:
-  - Recommended for MoLE models (eg. model1)
+  - Recommended for compact models (e.g. `model1_compact`)
+- **`"fast_gpu"`** — everything in `"fast"` **plus Triton Wigner kernels** (CUDA-only; requires `lmax==mmax==2`; install the optional `triton` via `pip install -e ".[gpu]"`, though it is already included in the CUDA `torch` wheels). The loader auto-manages the MoE merge by model:
+  - Recommended for MoE models (e.g. `model_smd`)
 
 ```python
 # compact, any molecule:
 dE, dF = predict_solvation_energy((Z, R), checkpoint="model1_compact",
                                   device="cuda", inference_settings="fast")
-# MoE model1
-dE, dF = predict_solvation_energy((Z, R), checkpoint="model1",
+# MoE model_smd
+dE, dF = predict_solvation_energy((Z, R), checkpoint="model_smd",
                                   device="cuda", inference_settings="fast_gpu")
 ```
 
@@ -172,42 +151,42 @@ without Triton):
 from anisolv import InferenceSettings, predict_solvation_energy
 settings = InferenceSettings(execution_mode="umas_fast_pytorch", tf32=True, compile=True,
                              merge_mole=True)  # MoE: merge -> block-GEMM + compile, single-composition
-dE, dF = predict_solvation_energy((Z, R), checkpoint="model1", device="cuda",
+dE, dF = predict_solvation_energy((Z, R), checkpoint="model_smd", device="cuda",
                                   inference_settings=settings)
 ```
 
-> **`torch.compile` caveat:** the first call is slow (graph capture) and a new molecule 
-> (element ratio) can trigger a recompile; if compilation fails the model falls back to eager
-> automatically. TF32 and `torch.compile` mainly help on GPU (TF32 is a no-op on CPU). 
-> The Triton `umas_fast_gpu` backend is GPU-only and (on the MoE model) single-composition.
+> **`torch.compile` caveat:** the first call is slow (graph capture) and a new molecule (element ratio) can trigger a recompile; if compilation fails the model falls back to eager automatically. TF32 and `torch.compile` mainly help on GPU. The Triton `umas_fast_gpu` backend is GPU-only and (on the MoE model) single-composition.
 
 ## Sample scripts
 
 The sample scripts live in this repository (clone it to run them). From the repo root:
 
 ```bash
-python anisolv/samples/H2O_single_point.py   # hydration dG for small molecules vs. experiment (needs ASE)
-python anisolv/samples/H2O_dGsolv.py         # full thermodynamic cycle: geometry relax + vibrational dG (needs fairchem)
+python anisolv/samples/H2O_single_point.py   # hydration dG for small molecules vs. experiment (ASE optional)
+python anisolv/samples/H2O_dGsolv.py         # full thermodynamic cycle: geometry relax + vibrational dG (needs ASE + a loaded gas-phase MLIP)
+```
+
+Both auto-select the checkpoint (`model_smd` > `model1_compact`); pass `--checkpoint` to pick one
+explicitly (a name, or a path to a `.pt`) and `--device cpu|cuda|mps`:
+
+```bash
+python anisolv/samples/H2O_single_point.py --checkpoint model1_compact
+python anisolv/samples/H2O_dGsolv.py --checkpoint model_smd --device cuda
 ```
 
 ## Supported solvents
 
-The model is trained/validated on 21 solvents:
+The model is trained/validated on 36 solvents:
 
-- **Water** - reaches **SMD-level** accuracy.
-- **acetone, acetonitrile, aniline, benzaldehyde, benzene, ch2cl2 (dichloromethane), chcl3 (chloroform), cs2 (carbon disulfide), dioxane, dmf, dmso, ether (diethyl ether), ethylacetate, hexadecane, hexane, methanol, nitromethane, octanol, thf, toluene** - **XTB-ALPB** accuracy.
+water; acetone; acetonitrile; aniline; benzaldehyde; benzene; bromobenzene; carbon tetrachloride; dichloromethane; chloroform; chlorobenzene; carbon disulfide; cyclohexanone; 1,2-dichloroethane; diiodomethane; 1,4-dioxane; DMF; DMSO; ethanol; diethyl ether; ethyl ethanoate; n-hexadecane; n-hexane; iodobenzene; methanol; nitromethane; N-methylformamide; 1-octanol; o-dichlorobenzene; n-pentane; 1-pentanol; 1-propanol; 2,2,2-trifluoroethanol; THF; toluene; tributyl phosphate.
 
-Solvents are conditioned through a descriptor embedding; the additional entries in
-`_const/solvent_descriptors.json` are not validated targets.
+The model has been shown to extrapolate very well to untrained solvents, and all 179 solvents in the Minnesota Solvent Descriptor Database are supported.
 
 ## License
 
-- **Inference code (this repository): MIT** - see [`LICENSE`](LICENSE). The bundled
-  **`model1_compact.pt`** weights are trained from scratch (not UMA-derived), so they fall under this
-  MIT license too.
-- **Full-accuracy weights (`model1.pt`, on Hugging Face): FAIR Chemistry License v1.** A derivative of
-  Meta's UMA (`uma-s-1p2`); redistribution is permitted only under the same license. Use is subject to
-  the FAIR Chemistry Acceptable Use Policy and applicable Trade Control Laws.
+- **Inference code (this repository): MIT** - see [`LICENSE`](LICENSE). The included
+  **`model1_compact.pt`** weights are trained from scratch.
+- **Full-accuracy weights (`model_smd.pt`, on Hugging Face): FAIR Chemistry License v1.** A derivative of Meta's UMA (`uma-s-1p2`); redistribution is permitted only under the same license. Use is subject to the FAIR Chemistry Acceptable Use Policy and applicable Trade Control Laws.
 
 ## Citation
 
@@ -225,8 +204,8 @@ If you use AniSolv, please cite both the UMA work it derives from and this repos
 }
 
 @misc{anisolv2026,
-  author       = {Ni, Anton},
-  title        = {{AniSolv}: Implicit Solvation Model for {MLIPs}},
+  author       = {Ni, Anton Z.},
+  title        = {{AniSolv: MLIP Implicit Solvation with DFT Accuracy}},
   year         = {2026},
   publisher    = {GitHub},
   howpublished = {\url{https://github.com/Ant-on-knee/anisolv}},
@@ -236,6 +215,5 @@ If you use AniSolv, please cite both the UMA work it derives from and this repos
 
 ## Acknowledgements
 
-Built by warmstarting from Meta FAIR Chemistry's UMA-S 1.2 (`uma-s-1p2`). UMA code is MIT-licensed
-([facebookresearch/fairchem](https://github.com/facebookresearch/fairchem)); UMA weights are under
-the FAIR Chemistry License.
+`model_smd` is built by initializing weights from Meta FAIR Chemistry's UMA-S 1.2 (`uma-s-1p2`). 
+UMA code is MIT-licensed ([facebookresearch/fairchem](https://github.com/facebookresearch/fairchem)); UMA weights are under the FAIR Chemistry License.

@@ -1,10 +1,5 @@
 """Torch-only unit test for the solvent-mask output gate (no checkpoint required).
 
-Builds a tiny randomly-initialized solvent-conditioned backbone + EFS head with
-`solvent_output_gate=True` and checks the structural guarantee: a vacuum input
-(solvent-present mask = 0) yields EXACTLY zero energy and forces, while a real
-solvent gives a nonzero prediction. Also checks that the encoding is vacuum-anchored.
-
 Run from the repo root:
 
     python -m pytest anisolv/tests/test_solvent_output_gate.py -q
@@ -53,9 +48,6 @@ def _tiny_gated_model(solvent_output_gate: bool):
 
 
 def _run(model, solvent):
-    # A solvent-embedding model always receives an (1, 8) vector; vacuum is the
-    # all-zeros vector (mask = 0), exactly as predict.py builds it via
-    # get_solvent_vector(None). The gate keys off that zero mask.
     vec = get_solvent_vector(solvent, strict=False)
     data = build_atomic_data(
         (_NUMBERS, _POS), charge=0, spin=1, solvent=vec, dtype=_DTYPE,
