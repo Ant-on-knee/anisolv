@@ -123,9 +123,6 @@ class AniSolvModel(nn.Module):
         if self._settings.compile:
             try:
                 torch._dynamo.config.recompile_limit = 32
-                # Compile the whole forward (not just the backbone) so the conservative-force
-                # autograd graph in the head is traced too. dynamic=True avoids a recompile per
-                # molecule size; new (natoms, nedges) shapes may still recompile up to the limit.
                 self._run = torch.compile(self._raw_forward, dynamic=True)
             except Exception as exc:  # pragma: no cover - environment dependent
                 logging.warning("torch.compile failed (%s); running eager", exc)

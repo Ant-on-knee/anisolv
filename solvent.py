@@ -49,6 +49,22 @@ def _transform(name: str, value: float) -> float:
 _VACUUM_NAMES = {"", "vacuum", "gas", "gas_phase", "gas-phase", "none"}
 
 _ALIASES = {
+    "carbontet": "carbon tetrachloride",
+    "tbutylbenzene": "tert-butylbenzene",
+    "phenylether": "diphenyl ether",
+    "dibromoethane": "1,2-dibromoethane",
+    "chlorohexane": "1-chlorohexane",
+    "fluoroctane": "1-fluorooctane",
+    "bromooctane": "1-bromooctane",
+    "hexadecyliodide": "1-iodohexadecane",
+
+    # defaults for ambiguous names 
+    "trimethylbenzene": "1,2,4-trimethylbenzene", 
+    "isopropyltoluene": "p-isopropyltoluene",
+    "methylformamide": "N-methylformamide (E/Z mixture)",
+    "tetrahydrothiophenedioxide": "tetrahydrothiophene-S,S-dioxide",
+    "dimethylpyridine": "2,6-dimethylpyridine",
+
     # abbreviations
     "dmso": "dimethyl sulfoxide (DMSO)",
     "dimethylsulfoxide": "dimethyl sulfoxide (DMSO)",
@@ -129,7 +145,7 @@ _ALIASES = {
     "trifluoroethanol": "2,2,2-trifluoroethanol", "tfe": "2,2,2-trifluoroethanol",
     "methoxyethanol": "2-methoxyethanol", "methyl cellosolve": "2-methoxyethanol",
 
-    # esters: table uses ethanoate/methanoate/propanoate/butanoate
+    # esters
     "methyl acetate": "methyl ethanoate",
     "ethyl acetate": "ethyl ethanoate",
     "propyl acetate": "propyl ethanoate", "n-propyl acetate": "propyl ethanoate",
@@ -217,7 +233,7 @@ _ALIASES = {
     "trans-2-pentene": "E-2-pentene",
 }
 
-_RACEMIC_PREFIXES = ("(+/-)-", "(+-)-", "(±)-", "(rs)-", "rac-", "dl-", "d,l-")
+_RACEMIC_PREFIXES = ("(+/-)-", "(+-)-", "(±)-", "(rs)-", "rac-", "dl-", "d,l-", "(\\xb1)-", "(\\xb1)")
 
 
 @functools.lru_cache(maxsize=1)
@@ -246,6 +262,11 @@ def _solvents_ci() -> dict:
     return {_norm(k): v for k, v in _load_raw()["solvents"].items()}
 
 
+def _squash(s: str) -> str:
+    """Lowercase with every separator removed. Not a normaliser -- see _squash_ci."""
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
 @functools.lru_cache(maxsize=1)
 def _canon_ci() -> dict:
     """Normalized name -> the table's own spelling of it."""
@@ -271,6 +292,21 @@ def _alias_ci() -> dict:
     return out
 
 
+@functools.lru_cache(maxsize=1)
+def _squash_ci() -> dict:
+    """Separator-free name -> canonical key, for source tables that omit punctuation.
+    """
+    table = _load_raw()["solvents"]
+    hits: dict = {}
+    for k in table:
+        hits.setdefault(_squash(k), set()).add(k)
+        stem = re.sub(r"\s*\([^)]*\)\s*$", "", k)
+        hits.setdefault(_squash(stem), set()).add(k)
+    for a, target in _alias_ci().items():
+        hits.setdefault(_squash(a), set()).add(target)
+    return {s: next(iter(v)) for s, v in hits.items() if s and len(v) == 1}
+
+
 def resolve_solvent_name(name):
     """Canonical table key for a solvent name or accepted alias; None if unrecognized.
 
@@ -283,7 +319,12 @@ def resolve_solvent_name(name):
     if key in _VACUUM_NAMES:
         return ""
     canon = _canon_ci().get(key)
-    return canon if canon is not None else _alias_ci().get(key)
+    if canon is not None:
+        return canon
+    alias = _alias_ci().get(key)
+    if alias is not None:
+        return alias
+    return _squash_ci().get(_squash(key))
 
 
 def list_solvents() -> list:

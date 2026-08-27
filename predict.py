@@ -21,8 +21,6 @@ _MODEL_CACHE: dict = {}
 _DEFAULT_SOLVENT = object()
 
 def _get_model(checkpoint, device, dtype, inference_settings):
-    # Resolve to the effective settings so the cache key reflects every knob (the backbone-aware
-    # downgrade in load_model is deterministic per checkpoint, which is already part of the key).
     settings = guess_inference_settings(inference_settings)
     key = (str(checkpoint), str(device), str(dtype), repr(settings))
     if key not in _MODEL_CACHE:

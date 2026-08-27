@@ -1,5 +1,5 @@
 <h1 align="center">AniSolv</h1>
-<p align="center"><em>A solvation model for machine-learning interatomic potentials.</em></p>
+<p align="center"><em>MLIP Implicit Solvation with DFT Accuracy</em></p>
 
 AniSolv predicts an **additive solvation correction** - an energy term $\Delta E$ and force
 term $\Delta F$ - that you add on top of *any* gas-phase potential to get solvated energies and
@@ -234,6 +234,5 @@ If you use AniSolv, please cite both the UMA work it derives from and this repos
 
 ## Acknowledgements
 
-Built by warmstarting from Meta FAIR Chemistry's UMA-S 1.2 (`uma-s-1p2`). UMA code is MIT-licensed
-([facebookresearch/fairchem](https://github.com/facebookresearch/fairchem)); UMA weights are under
-the FAIR Chemistry License.
+Built by initializing weights from Meta FAIR Chemistry's UMA-S 1.2 (`uma-s-1p2`). 
+UMA code is MIT-licensed ([facebookresearch/fairchem](https://github.com/facebookresearch/fairchem)); UMA weights are under the FAIR Chemistry License.
