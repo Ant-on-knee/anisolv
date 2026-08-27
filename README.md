@@ -5,8 +5,8 @@ AniSolv predicts the single-point solvation energy: it produces a solvation ener
 
 $$
 \begin{aligned}
-E_{\text{solvated}} &= E_{\text{gas}}\,(\text{your potential}) + \Delta E_{\text{anisolv}} \\
-F_{\text{solvated}} &= F_{\text{gas}}\,(\text{your potential}) + \Delta F_{\text{anisolv}}
+E_{\text{solvated}} &= E_{\text{gas}} + \Delta E_{\text{anisolv}} \\
+F_{\text{solvated}} &= F_{\text{gas}} + \Delta F_{\text{anisolv}}
 \end{aligned}
 $$
 
@@ -54,9 +54,9 @@ For a non-editable (PyPI) install, use `pip install "anisolv[ase]"`.
 
 > **PyTorch note:** `pip` will pull a default `torch` build. For a specific CUDA/CPU build, install torch from [pytorch.org](https://pytorch.org/get-started/locally/) first, then install AniSolv.
 
-## Download the model weights (gated)
+## Download the model weights
 
-The trained checkpoint **`model_smd.pt` (~1.1 GB) is not in this repository** - it is git-ignored and distributed separately on Hugging Face under the **FAIR Chemistry License**.
+The trained checkpoint **`model_smd.pt` (~1.1 GB) is not in this repository** - it is git-ignored and distributed separately on Hugging Face.
 
 **1. Request access.** Go to **https://huggingface.co/antonknee/anisolv** and accept the FAIR Chemistry License. You must provide your full legal name, date of birth, and organization.
 
@@ -204,8 +204,8 @@ If you use AniSolv, please cite both the UMA work it derives from and this repos
 }
 
 @misc{anisolv2026,
-  author       = {Ni, Anton},
-  title        = {{AniSolv}: Implicit Solvation Model for {MLIPs}},
+  author       = {Ni, Anton Z.},
+  title        = {{AniSolv: MLIP Implicit Solvation with DFT Accuracy}},
   year         = {2026},
   publisher    = {GitHub},
   howpublished = {\url{https://github.com/Ant-on-knee/anisolv}},

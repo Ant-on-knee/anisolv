@@ -5,18 +5,18 @@
 # derivative of Meta's UMA (uma-s-1p2), not MIT. This file cites the *software*; please also cite
 # the UMA model (listed under `references`) that the weights derive from.
 #
-# TODO: bump `version` and `date-released` when the model is finalized.
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below, and please also cite the UMA model it derives from (see references)."
-title: "AniSolv: Implicit Solvation Model for MLIPs"
+title: "AniSolv: MLIP Implicit Solvation with DFT Accuracy"
 type: software
+version: "0.1.0"
 authors:
   - family-names: Ni
-    given-names: Anton
+    given-names: "Anton Z."
 repository-code: "https://github.com/Ant-on-knee/anisolv"
 url: "https://github.com/Ant-on-knee/anisolv"
 license: MIT
-date-released: 2026-06-18
+date-released: 2026-08-27
 references:
   - type: article
     title: "UMA: A Family of Universal Models for Atoms"

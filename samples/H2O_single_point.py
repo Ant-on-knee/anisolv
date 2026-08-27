@@ -135,7 +135,7 @@ def main(argv=None) -> int:
         print(f"{label:14s} {formula:10s} {len(numbers):3d} "
               f"{dG_pred:+9.2f} {dG_exp:+9.2f} {err:+9.2f}")
 
-    # Error summary, same statistics run_mnsol._summarize reports.
+    # Error summary (MAE / RMSE / bias vs. experiment); uncomment to print.
     # n = len(errs)
     # mae = sum(abs(e) for e in errs) / n
     # rmse = math.sqrt(sum(e * e for e in errs) / n)

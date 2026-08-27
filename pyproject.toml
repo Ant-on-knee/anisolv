@@ -9,7 +9,7 @@ description = "Standalone implicit solvation model for machine-learning interato
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Anton Ni" }]
+authors = [{ name = "Anton Z. Ni" }]
 keywords = [
     "chemistry",
     "solvation",
@@ -45,7 +45,7 @@ packages = [
 ]
 
 [tool.setuptools.package-data]
-# Bundle the compact (non-gated) weights so a plain `pip install` works out of the box.
+# Include compact weights.
 # model_smd.pt is intentionally excluded — it is downloaded separately.
 "anisolv" = ["_const/*.json", "_const/*.pt", "models/model1_compact.pt"]
 "anisolv._backbone" = ["*.pt"]

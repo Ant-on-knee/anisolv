@@ -37,7 +37,7 @@ from ase.vibrations import Vibrations
 
 from anisolv import default_checkpoint_path, predict_solvation_energy
 
-EV_TO_KCAL = 1.0 / (units.kcal / units.mol)  # ~23.0605, matches solvation_fe
+EV_TO_KCAL = 1.0 / (units.kcal / units.mol)  # ~23.0605
 _ZERO_MODE_eV = 1e-4  # modes below this |energy| are trans/rot remnants / numerical noise
 class AniSolvDeltaCalculator(Calculator):
     """``predict_solvation_energy`` as an ASE calculator (the additive solvation correction).
@@ -112,7 +112,7 @@ def _is_linear(atoms, rel_tol=1e-5):
 
 
 def harmonic_gibbs(atoms, calc, temperature=298.15, delta=0.01):
-    """Harmonic free energy (eV) at ``atoms`` - adapted from solvation_fe/thermo.vib_gibbs.
+    """Free energy (eV) at ``atoms``.
 
     Treats the Helmholtz F = E_elec + ZPE + U_vib - T*S_vib as G: the pV term is negligible
     and translation/rotation cancel between the gas and solvated geometries of one molecule.

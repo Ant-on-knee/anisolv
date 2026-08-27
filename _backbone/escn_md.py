@@ -579,10 +579,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        # Euler/Jd rotation path only (quaternion path not vendored; see __init__).
+        # Euler/Jd rotation path only (the quaternion path is not included; see __init__).
         # gamma is pinned to 0 in init_edge_rot_euler_angles, making this deterministic;
-        # eSCN is azimuth-invariant so this matches the production model exactly
-        # (verified in Phase 0A/0B).
+        # eSCN is azimuth-invariant so this matches the production model exactly.
         Jd_buffers = [
             getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
             for l in range(self.lmax + 1)
