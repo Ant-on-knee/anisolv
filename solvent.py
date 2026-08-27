@@ -107,7 +107,7 @@ _ALIASES = {
     "di-n-butyl ether": "dibutyl ether",
     "isooctane": "2,2,4-trimethylpentane",
 
-    # n-alkanes: the table carries the "n-" prefix, the bare name is universal
+    # n-alkanes
     "pentane": "n-pentane",
     "hexane": "n-hexane",
     "heptane": "n-heptane",
@@ -121,7 +121,7 @@ _ALIASES = {
     "butylbenzene": "n-butylbenzene",
     "cetane": "n-hexadecane",
 
-    # alcohols: bare name, "n-" form, and the IUPAC "-an-N-ol" form
+    # alcohols: maps unspecified name to "n-" isomer, and the IUPAC "-an-N-ol" form
     "propanol": "1-propanol", "n-propanol": "1-propanol", "propan-1-ol": "1-propanol",
     "butanol": "1-butanol", "n-butanol": "1-butanol", "butan-1-ol": "1-butanol",
     "pentanol": "1-pentanol", "n-pentanol": "1-pentanol", "pentan-1-ol": "1-pentanol",

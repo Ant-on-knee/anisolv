@@ -1,14 +1,11 @@
 """Unit test for the MoE MOLE-merge fast path.
 
 Merging the MOLE experts (settings.merge_mole=True) collapses the per-system expert mixture into a
-plain eSCNMDBackbone with single Linear SO2 layers. That is what makes the block-GEMM and
-torch.compile fast paths (and the Triton umas_fast_gpu backend) safe on the MoE model. The merge is
-a mathematical identity for a fixed composition, so a tiny randomly-initialized MoE must reproduce
-its own un-merged energy/forces to float64 precision after merging.
+plain eSCNMDBackbone with single Linear SO2 layers.
 
 Checks the following:
   * merge_MOLE_model must pass `solvent` to csd_embedding (solvent-conditioned model),
-  * the freshly-built merged backbone must be moved to the source device/dtype.
+  * the merged backbone must be moved to the source device/dtype.
 
 Run from the repo root:  python -m pytest anisolv/tests/test_moe_merge.py -q
 """

@@ -1,8 +1,4 @@
 """Assemble the backbone + head from a converted checkpoint and load weights.
-
-Torch-only: no fairchem on the import path. The module tree (self.backbone /
-self.output_heads['efs']) mirrors fairchem's HydraModel naming so the converted EMA
-state dict (keys backbone.* / output_heads.efs.*) loads with strict=True.
 """
 
 from __future__ import annotations
@@ -21,7 +17,7 @@ from ._backbone.escn_moe import eSCNMDMoeBackbone
 
 _CKPT_DIR = Path(__file__).resolve().parent / "models"
 
-# Wired-up backbone backends. "general" is the pure-torch reference path; 
+# "general" is the cpu reference path; 
 # "umas_fast_pytorch" is the block-diagonal SO2 GEMM path (composition-independent on non-MoE checkpoints);
 # "umas_fast_gpu" adds the vTriton Wigner-permute kernels 
 # On a MoE checkpoint the GPU/block-GEMM paths require a MOLE merge first (merge_mole=True, fixed composition)
@@ -32,7 +28,7 @@ _SUPPORTED_EXECUTION_MODES = {"general", "umas_fast_pytorch", "umas_fast_gpu"}
 def tf32_context_manager():
     """Enable TF32 matmuls for the duration of the block, restoring prior state on exit.
 
-    TF32 trades a little float32 mantissa precision for speed on NVIDIA GPUs; it is a no-op on CPU.
+    TF32 trades a little float32 mantissa precision for speed on NVIDIA GPUs.
     """
     old_matmul = torch.backends.cuda.matmul.allow_tf32
     old_cudnn = torch.backends.cudnn.allow_tf32
@@ -47,11 +43,10 @@ def tf32_context_manager():
         torch.backends.cudnn.allow_tf32 = old_cudnn
         torch.set_float32_matmul_precision(old_prec)
 
-# Default checkpoint selection, in priority order. 'model_smd' (full-accuracy, gated UMA-derived
-# weights) ships separately and may be absent; 'model1_compact' (trained from scratch, ~25 MB) is
-# bundled in the repo and always available. ('model1' is deprecated: superseded by 'model_smd'.)
+# Supported checkpoints, in auto-selection priority order. 
+# 'model_smd' (highest accuracy, download from HF); 
+# 'model1_compact' (trained from scratch, ~25 MB) is included in the repo and always available.
 _CHECKPOINT_PRIORITY = ("model_smd", "model1_compact")
-
 
 def default_checkpoint() -> str:
     """Checkpoint used when the caller names none: the first of 'model_smd' > 
@@ -95,11 +90,6 @@ _INFERENCE_OVERRIDES = dict(
 
 class AniSolvModel(nn.Module):
     """backbone + EFS head; forward(data) -> head output dict (raw, un-normalized).
-
-    Inference backend selection (block-GEMM, tf32, torch.compile) is applied lazily on the first
-    forward, because the backbone's prepare_for_inference needs a sample batch (it may merge MOLE
-    experts and lock composition). With the "default"/general settings every step below is a no-op
-    or identity, so the legacy compute path is reproduced bit-for-bit.
     """
 
     def __init__(self, backbone: nn.Module, head: nn.Module, norm: dict,
@@ -142,6 +132,7 @@ class AniSolvModel(nn.Module):
 
 
 def _resolve(checkpoint: str | Path) -> Path:
+    """Path to a checkpoint: an existing path, or a name looked up as models/<name>.pt."""
     p = Path(checkpoint)
     if p.exists():
         return p
@@ -149,8 +140,8 @@ def _resolve(checkpoint: str | Path) -> Path:
     if cand.exists():
         return cand
     raise FileNotFoundError(
-        f"checkpoint {checkpoint!r} not found (looked for {p} and {cand}). "
-        f"Run convert_checkpoint.py first."
+        f"checkpoint {checkpoint!r} not recognized (looked for {p} and {cand}). "
+        f"Supported checkpoints: {_CHECKPOINT_PRIORITY}, or a path to a converted .pt."
     )
 
 
@@ -199,10 +190,6 @@ def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
             f"{path}: unsupported backbone class {cls_name!r} (known: {sorted(_BACKBONES)})"
         ) from None
 
-    # umas_fast_gpu (Triton) needs CUDA and plain-Linear SO2 layers. Auto-manage merge_mole by
-    # backbone: a MoE checkpoint must be merged first (fixed composition, single molecule); the
-    # compact model is already plain-Linear, so it runs merge-free and stays composition-independent
-    # (still valid for multi-molecule eval). This is what lets the 'fast_gpu' preset target both.
     if settings.execution_mode == "umas_fast_gpu":
         if "cuda" not in str(device):
             raise ValueError(
@@ -212,16 +199,7 @@ def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
         if settings.merge_mole != want_merge:
             settings = replace(settings, merge_mole=want_merge)
 
-    # Backbone-aware safety for MoE checkpoints. The fast backends (block-GEMM / Triton) and
-    # torch.compile are only safe once the MOLE experts are merged into plain Linear layers; tf32 is
-    # always safe. With merge_mole=True (e.g. the 'fast_gpu' preset, or set explicitly) the merged
-    # backbone is a plain eSCNMDBackbone, so we leave the fast backend and compile ON.
     if backbone_cls is eSCNMDMoeBackbone and not settings.merge_mole:
-        # No merge -> SO2 layers are still MOLE: block-GEMM/Triton can't convert them, and the live
-        # MOLE routing side-channel (mole_sizes / expert coefficients written onto a plain
-        # MOLEGlobals object mid-forward, read back by each MOLE sublayer) is not preserved by dynamo
-        # across the forward's graph breaks -> empty MOLE outputs (a shape error the prepare()
-        # try/except can't catch). Fall back to general + tf32.
         if settings.execution_mode in ("umas_fast_pytorch", "umas_fast_gpu"):
             logging.warning(
                 "%s on a MoE checkpoint (%s) needs a MOLE merge (merge_mole=True / the 'fast_gpu' "
