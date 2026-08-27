@@ -26,7 +26,7 @@ Two checkpoints are supported, in this order of preference: **`model_smd` > `mod
 
 Leaving `checkpoint` unset (`None`) auto-selects `model_smd` when its weights are present and otherwise falls back to the bundled `model1_compact`.
 
-> **Deprecated:** every other checkpoint (e.g. the earlier MoE `model1`) is superseded by `model_smd`, which outperforms them across the board. They are unsupported and not recognized by name; if you still have one, load it by explicit path (`checkpoint="/path/to/model1.pt"`).
+> **Deprecated:** all other checkpoints (e.g. the earlier MoE `model1`) are superseded by `model_smd`, which outperforms them across the board. They are unsupported and not recognized by name; if you still have one, load it by explicit path (`checkpoint="/path/to/model1.pt"`).
 
 ## Installation
 
@@ -133,7 +133,7 @@ To convert $\Delta E$ to kcal/mol, multiply by `23.060548`.
 - **`"fast"`** — the block-diagonal SO2 GEMM backend plus TF32 matmuls and `torch.compile`.
   - Recommended for compact models (e.g. `model1_compact`)
 - **`"fast_gpu"`** — everything in `"fast"` **plus Triton Wigner kernels** (CUDA-only; requires `lmax==mmax==2`; install the optional `triton` via `pip install -e ".[gpu]"`, though it is already included in the CUDA `torch` wheels). The loader auto-manages the MoE merge by model:
-  - Recommended for MoE models (eg. `model_smd`)
+  - Recommended for MoE models (e.g. `model_smd`)
 
 ```python
 # compact, any molecule:
