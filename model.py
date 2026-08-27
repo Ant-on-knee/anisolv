@@ -20,7 +20,7 @@ _CKPT_DIR = Path(__file__).resolve().parent / "models"
 # "general" is the cpu reference path; 
 # "umas_fast_pytorch" is the block-diagonal SO2 GEMM path (composition-independent on non-MoE checkpoints);
 # "umas_fast_gpu" adds the vTriton Wigner-permute kernels 
-# On a MoE checkpoint the GPU/block-GEMM paths require a MOLE merge first (merge_mole=True, fixed composition)
+# On a MoE checkpoint the GPU/block-GEMM paths require a MoE merge first (merge_mole=True, fixed composition)
 _SUPPORTED_EXECUTION_MODES = {"general", "umas_fast_pytorch", "umas_fast_gpu"}
 
 
@@ -50,7 +50,7 @@ _CHECKPOINT_PRIORITY = ("model_smd", "model1_compact")
 
 def default_checkpoint() -> str:
     """Checkpoint used when the caller names none: the first of 'model_smd' > 
-    'model1_compact' whose .pt is present in the bundled models dir."""
+    'model1_compact' whose .pt is present in the models dir."""
     for name in _CHECKPOINT_PRIORITY:
         if (_CKPT_DIR / f"{name}.pt").exists():
             return name
@@ -72,8 +72,7 @@ _BACKBONES = {
 }
 _DEFAULT_BACKBONE = "eSCNMDMoeBackbone"
 
-# Inference overrides applied on top of the checkpoint's backbone_config. These force the
-# torch-only, deterministic, molecular configuration the standalone package targets.
+# Inference overrides applied on top of the checkpoint's backbone_config. 
 _INFERENCE_OVERRIDES = dict(
     otf_graph=False,            # edges precomputed by anisolv.data
     use_pbc=False,
@@ -107,7 +106,7 @@ class AniSolvModel(nn.Module):
         return self.output_heads["efs"](data, emb)
 
     def _prepare(self, data) -> None:
-        # prepare_for_inference may RETURN A NEW backbone (the MOLE-merge path), so reassign.
+        # prepare_for_inference may RETURN A NEW backbone (the MoE-merge path), so reassign.
         self.backbone = self.backbone.prepare_for_inference(data, self._settings)
         self._run = self._raw_forward
         if self._settings.compile:
@@ -123,9 +122,7 @@ class AniSolvModel(nn.Module):
         if not self._prepared:
             self._prepare(data)
         else:
-            # Guards the MOLE-merge composition lock; a no-op when unmerged.
             self.backbone.on_predict_check(data)
-        # Conservative forces (direct_forces=False) need grad enabled, so never wrap in no_grad.
         ctx = tf32_context_manager() if self._settings.tf32 else nullcontext()
         with ctx:
             return self._run(data)
@@ -151,25 +148,23 @@ def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
     """Build and load the standalone delta model from a converted checkpoint.
 
     `checkpoint` is None (auto: 'model_smd' if its weights are present in anisolv/models, else
-    the bundled 'model1_compact'), a checkpoint name, or a path to a converted .pt. Returns an
+    the included 'model1_compact'), a checkpoint name, or a path to a converted .pt. Returns an
     AniSolvModel in eval mode on `device` with params cast to `dtype` (use torch.float64 for
     high-accuracy checks).
 
     `inference_settings` selects the inference path: a preset name -- 
     'default' (reference implementation), 
-    'fast' (block-GEMM SO2 + tf32 + torch.compile, no MoLE merging),
+    'fast' (block-GEMM SO2 + tf32 + torch.compile, no MoE merging),
     'fast_gpu' (adds the Triton Wigner kernels; CUDA-only)
     or a custom InferenceSettings (whose `execution_mode` field picks the backend).
 
     'fast'/'umas_fast_pytorch' is composition-independent on the non-MoE 'model1_compact'.
-    On the MoE 'model_smd' it would need a MOLE merge first, so it is
-    downgraded to 'general' + tf32
+    On the MoE 'model_smd' it would need a MoE merge first, so it is downgraded to 'general' + tf32
 
     'fast_gpu'/'umas_fast_gpu' (requires CUDA, lmax==mmax==2, triton) auto-manages the merge by backbone:
     compact models' performance remains identical to fast;
-    MoE checkpoints are MOLE-merged so block-GEMM + Triton + torch.compile all apply, at the cost of
-    locking to ONE composition/charge/spin/solvent -- single molecule per loaded model (re-load to
-    change it).
+    MoE checkpoints are MoE-merged so block-GEMM + Triton + torch.compile all apply, at the cost of
+    locking to ONE composition/charge/spin/solvent
     """
     if checkpoint is None:
         checkpoint = default_checkpoint()
@@ -202,7 +197,7 @@ def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
     if backbone_cls is eSCNMDMoeBackbone and not settings.merge_mole:
         if settings.execution_mode in ("umas_fast_pytorch", "umas_fast_gpu"):
             logging.warning(
-                "%s on a MoE checkpoint (%s) needs a MOLE merge (merge_mole=True / the 'fast_gpu' "
+                "%s on a MoE checkpoint (%s) needs a MoE merge (merge_mole=True / the 'fast_gpu' "
                 "preset); falling back to the general backend (tf32 still applies).",
                 settings.execution_mode, cls_name,
             )

@@ -1,4 +1,4 @@
-"""Sample: single-point hydration free energies (dG_solv in water) via the anisolv.
+"""Sample: single-point hydration free energies (dE_solv in water) via the anisolv.
 
 takes a handful of small solutes, obtains the water solvation correction, and reports it against
 experimental hydration free energies.

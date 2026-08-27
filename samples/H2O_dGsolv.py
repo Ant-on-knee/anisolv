@@ -1,6 +1,6 @@
 """Sample: dG_solv of H2O in water via the harmonic thermodynamic cycle (vibrational).
 
-The sample performes the following:
+The sample performs the following:
 
     1. relax H2O in the gas phase with a base potential          -> E_gas, G_gas
     2. relax H2O in water with (base + anisolv water delta)      -> E_solv, G_solv
