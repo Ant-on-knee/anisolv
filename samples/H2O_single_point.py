@@ -3,8 +3,8 @@
 takes a handful of small solutes, obtains the water solvation correction, and reports it against
 experimental hydration free energies.
 
-    python anisolv/samples/H2O_single_point.py                              # auto: model_smd > model1_compact
-    python anisolv/samples/H2O_single_point.py --checkpoint model1_compact  # or a name / path to a .pt
+    python anisolv/samples/H2O_single_point.py                              # auto: model_smd > model_smd_compact
+    python anisolv/samples/H2O_single_point.py --checkpoint model_smd_compact  # or a name / path to a .pt
 
 To use ASE's geometries instead of the bundled fallback, install the optional extra:
 
@@ -109,7 +109,7 @@ def _resolve(name: str):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="single-point hydration dG of small solutes via anisolv")
     ap.add_argument("--checkpoint", default=None,
-                    help="checkpoint name or path to a .pt (default: auto, model_smd > model1_compact)")
+                    help="checkpoint name or path to a .pt (default: auto, model_smd > model_smd_compact)")
     ap.add_argument("--device", default="cpu", help="torch device: cpu (default), cuda, or mps")
     args = ap.parse_args(argv)
     ckpt_label = args.checkpoint or f"{default_checkpoint_path().stem} (auto-selected)"

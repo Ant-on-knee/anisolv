@@ -18,15 +18,15 @@ Key properties:
 
 ### Model(s)
 
-Two checkpoints are supported, in this order of preference: **`model_smd` > `model1_compact`**. Both carry a per-system **solvent embedding** and an **output gate** (vacuum → exactly 0).
+Two checkpoints are supported, in this order of preference: **`model_smd` > `model_smd_compact`**. Both carry a per-system **solvent embedding** and an **output gate** (vacuum is exactly 0).
 `load_model` / `predict_solvation_energy` auto-select the backbone from the checkpoint, so one can easily change models by specifying `checkpoint=`:
 
 - **`model_smd`** (default when present) — a 64-expert MoE `eSCNMDMoeBackbone` (~291 M params), the full-accuracy model, trained against SMD reference solvation data. **Initialized from Meta's UMA `uma-s-1p2`**; the weights must be downloaded from Hugging Face (see below).
-- **`model1_compact`** — a dense GNN (~6.4 M params, ~25 MB) for fast / low-memory inference, with the same solvent conditioning and gate. Trained from scratch (not UMA-derived) and already included in this repo.
+- **`model_smd_compact`** — a dense GNN (~6.4 M params, ~25 MB) for fast / low-memory inference, with the same solvent conditioning and gate, trained against the same SMD reference data. Trained from scratch and already included in this repo.
 
-Leaving `checkpoint` unset (`None`) auto-selects `model_smd` when its weights are present and otherwise falls back to the bundled `model1_compact`.
+Leaving `checkpoint` unset (`None`) auto-selects `model_smd` when its weights are present and otherwise falls back to the bundled `model_smd_compact`.
 
-> **Deprecated:** all other checkpoints (e.g. the earlier MoE `model1`) are superseded by `model_smd`, which outperforms them across the board. They are unsupported and not recognized by name; if you still have one, load it by explicit path (`checkpoint="/path/to/model1.pt"`).
+> **Deprecated:** all other checkpoints (the earlier MoE `model1` and the compact `model1_compact`) are superseded by `model_smd` / `model_smd_compact`, which outperform them across the board. They are unsupported and not recognized by name; if you still have one, load it by explicit path (`checkpoint="/path/to/model.pt"`).
 
 ## Installation
 
@@ -75,7 +75,7 @@ hf auth login                  # paste a token from https://huggingface.co/setti
   hf download antonknee/anisolv model_smd.pt --local-dir models
   ```
 
-- **If you installed with a plain `pip install`** (from PyPI or `pip install git+…`), download it to any directory you control and pass its **absolute path** at call time. Until you do, the bundled `model1_compact` remains the default:
+- **If you installed with a plain `pip install`** (from PyPI or `pip install git+…`), download it to any directory you control and pass its **absolute path** at call time. Until you do, the bundled `model_smd_compact` remains the default:
 
   ```bash
   hf download antonknee/anisolv model_smd.pt --local-dir /path/to/anisolv-weights
@@ -116,7 +116,7 @@ predict_solvation_energy(
     charge: int = 0,           # total charge
     spin: int = 1,             # spin multiplicity
     solvent="water",           # solvent name (str), or None for vacuum (-> exactly 0)
-    checkpoint: str = None,    # auto: "model_smd" > "model1_compact"; or a name / path to a .pt
+    checkpoint: str = None,    # auto: "model_smd" > "model_smd_compact"; or a name / path to a .pt
     device: str = "cpu",       # "cpu", "cuda", or "mps"
     dtype=torch.float32,       # torch.float32 (default) or torch.float64
     inference_settings="default",  # "default" (reference), "fast", or "fast_gpu" (see below)
@@ -131,13 +131,13 @@ To convert $\Delta E$ to kcal/mol, multiply by `23.060548`.
 
 - **`"default"`** — the pure-torch reference path. Bit-for-bit identical to earlier releases.
 - **`"fast"`** — the block-diagonal SO2 GEMM backend plus TF32 matmuls and `torch.compile`.
-  - Recommended for compact models (e.g. `model1_compact`)
+  - Recommended for compact models (e.g. `model_smd_compact`)
 - **`"fast_gpu"`** — everything in `"fast"` **plus Triton Wigner kernels** (CUDA-only; requires `lmax==mmax==2`; install the optional `triton` via `pip install -e ".[gpu]"`, though it is already included in the CUDA `torch` wheels). The loader auto-manages the MoE merge by model:
   - Recommended for MoE models (e.g. `model_smd`)
 
 ```python
 # compact, any molecule:
-dE, dF = predict_solvation_energy((Z, R), checkpoint="model1_compact",
+dE, dF = predict_solvation_energy((Z, R), checkpoint="model_smd_compact",
                                   device="cuda", inference_settings="fast")
 # MoE model_smd
 dE, dF = predict_solvation_energy((Z, R), checkpoint="model_smd",
@@ -166,11 +166,11 @@ python anisolv/samples/H2O_single_point.py   # hydration dG for small molecules 
 python anisolv/samples/H2O_dGsolv.py         # full thermodynamic cycle: geometry relax + vibrational dG (needs ASE + a loaded gas-phase MLIP)
 ```
 
-Both auto-select the checkpoint (`model_smd` > `model1_compact`); pass `--checkpoint` to pick one
+Both auto-select the checkpoint (`model_smd` > `model_smd_compact`); pass `--checkpoint` to pick one
 explicitly (a name, or a path to a `.pt`) and `--device cpu|cuda|mps`:
 
 ```bash
-python anisolv/samples/H2O_single_point.py --checkpoint model1_compact
+python anisolv/samples/H2O_single_point.py --checkpoint model_smd_compact
 python anisolv/samples/H2O_dGsolv.py --checkpoint model_smd --device cuda
 ```
 
@@ -178,14 +178,14 @@ python anisolv/samples/H2O_dGsolv.py --checkpoint model_smd --device cuda
 
 The model is trained/validated on 36 solvents:
 
-water; acetone; acetonitrile; aniline; benzaldehyde; benzene; bromobenzene; carbon tetrachloride; dichloromethane; chloroform; chlorobenzene; carbon disulfide; cyclohexanone; 1,2-dichloroethane; diiodomethane; 1,4-dioxane; DMF; DMSO; ethanol; diethyl ether; ethyl ethanoate; n-hexadecane; n-hexane; iodobenzene; methanol; nitromethane; N-methylformamide; 1-octanol; o-dichlorobenzene; n-pentane; 1-pentanol; 1-propanol; 2,2,2-trifluoroethanol; THF; toluene; tributyl phosphate.
+water; acetone; acetonitrile; aniline; benzaldehyde; benzene; bromobenzene; carbon tetrachloride; dichloromethane; chloroform; chlorobenzene; carbon disulfide; cyclohexanone; 1,2-dichloroethane; diiodomethane; 1,4-dioxane; DMF; DMSO; ethanol; diethyl ether; ethyl acetate; n-hexadecane; n-hexane; iodobenzene; methanol; nitromethane; N-methylformamide; 1-octanol; o-dichlorobenzene; n-pentane; 1-pentanol; 1-propanol; 2,2,2-trifluoroethanol; THF; toluene; tributyl phosphate.
 
 The model has been shown to extrapolate very well to untrained solvents, and all 179 solvents in the Minnesota Solvent Descriptor Database are supported.
 
 ## License
 
 - **Inference code (this repository): MIT** - see [`LICENSE`](LICENSE). The included
-  **`model1_compact.pt`** weights are trained from scratch.
+  **`model_smd_compact.pt`** weights are trained from scratch.
 - **Full-accuracy weights (`model_smd.pt`, on Hugging Face): FAIR Chemistry License v1.** A derivative of Meta's UMA (`uma-s-1p2`); redistribution is permitted only under the same license. Use is subject to the FAIR Chemistry Acceptable Use Policy and applicable Trade Control Laws.
 
 ## Citation
