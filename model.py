@@ -45,12 +45,13 @@ def tf32_context_manager():
 
 # Supported checkpoints, in auto-selection priority order. 
 # 'model_smd' (highest accuracy, download from HF); 
-# 'model1_compact' (trained from scratch, ~25 MB) is included in the repo and always available.
-_CHECKPOINT_PRIORITY = ("model_smd", "model1_compact")
+# 'model_smd_compact' (trained from scratch, ~25 MB) is included in the repo and always available.
+# ('model1' and 'model1_compact' are deprecated: superseded by these two.)
+_CHECKPOINT_PRIORITY = ("model_smd", "model_smd_compact")
 
 def default_checkpoint() -> str:
     """Checkpoint used when the caller names none: the first of 'model_smd' > 
-    'model1_compact' whose .pt is present in the models dir."""
+    'model_smd_compact' whose .pt is present in the models dir."""
     for name in _CHECKPOINT_PRIORITY:
         if (_CKPT_DIR / f"{name}.pt").exists():
             return name
@@ -67,7 +68,7 @@ def print_default_checkpoint_path() -> None:
     print(default_checkpoint_path())
 
 _BACKBONES = {
-    "eSCNMDBackbone": eSCNMDBackbone,        # non-MoE, solvent-conditioned (model1_compact)
+    "eSCNMDBackbone": eSCNMDBackbone,        # non-MoE, solvent-conditioned (model_smd_compact)
     "eSCNMDMoeBackbone": eSCNMDMoeBackbone,  # UMA-S-1.2 mixture-of-experts (model_smd)
 }
 _DEFAULT_BACKBONE = "eSCNMDMoeBackbone"
@@ -148,7 +149,7 @@ def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
     """Build and load the standalone delta model from a converted checkpoint.
 
     `checkpoint` is None (auto: 'model_smd' if its weights are present in anisolv/models, else
-    the included 'model1_compact'), a checkpoint name, or a path to a converted .pt. Returns an
+    the included 'model_smd_compact'), a checkpoint name, or a path to a converted .pt. Returns an
     AniSolvModel in eval mode on `device` with params cast to `dtype` (use torch.float64 for
     high-accuracy checks).
 
@@ -158,7 +159,7 @@ def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
     'fast_gpu' (adds the Triton Wigner kernels; CUDA-only)
     or a custom InferenceSettings (whose `execution_mode` field picks the backend).
 
-    'fast'/'umas_fast_pytorch' is composition-independent on the non-MoE 'model1_compact'.
+    'fast'/'umas_fast_pytorch' is composition-independent on the non-MoE 'model_smd_compact'.
     On the MoE 'model_smd' it would need a MoE merge first, so it is downgraded to 'general' + tf32
 
     'fast_gpu'/'umas_fast_gpu' (requires CUDA, lmax==mmax==2, triton) auto-manages the merge by backbone:
@@ -177,6 +178,8 @@ def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
         raise ValueError(f"{path} is not an anisolv-ckpt-v1 checkpoint")
 
     cfg = dict(ckpt["backbone_config"])
+    if cfg.get("dataset_list") is not None and cfg.get("dataset_mapping") is None:
+        cfg["dataset_mapping"] = {name: name for name in cfg.pop("dataset_list")}
     cls_name = str(cfg.get("model", "")).rsplit(".", 1)[-1] or _DEFAULT_BACKBONE
     try:
         backbone_cls = _BACKBONES[cls_name]
@@ -204,7 +207,7 @@ def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
             settings = replace(settings, execution_mode="general")
         if settings.compile:
             logging.warning(
-                "torch.compile is not supported on an unmerged MoE checkpoint (%s): the MOLE "
+                "torch.compile is not supported on an unmerged MoE checkpoint (%s): the MoE "
                 "routing side-channel is not dynamo-safe across graph breaks. Disabling compile "
                 "(tf32 still applies).", cls_name,
             )
