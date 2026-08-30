@@ -31,7 +31,7 @@ Leaving `checkpoint` unset (`None`) auto-selects `model_smd` when its weights ar
 ## Installation
 
 ```bash
-git clone https://github.com/Ant-on-knee/anisolv.git
+git clone git@github.com:Ant-on-knee/anisolv.git
 cd anisolv
 pip install -e .              # editable install; or `pip install .`
 ```
@@ -39,7 +39,7 @@ pip install -e .              # editable install; or `pip install .`
 You can also install straight from GitHub without cloning:
 
 ```bash
-pip install "git+https://github.com/Ant-on-knee/anisolv.git"
+pip install "git+ssh://git@github.com/Ant-on-knee/anisolv.git"
 ```
 
 Optional extras:
