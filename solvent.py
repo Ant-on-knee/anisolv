@@ -11,6 +11,7 @@ import functools
 import json
 import logging
 import math
+import os
 import re
 from pathlib import Path
 
@@ -36,6 +37,16 @@ _SOLVENT_STATS = {
     "en-halogen": {"transform": "linear", "scale": 0.174984},
 }
 
+_EPS_STATS = {
+    "log": {"transform": "log", "scale": 0.960804},
+    "born": {"transform": "born", "scale": 0.165059},
+}
+_EPS_TRANSFORM_ENV = os.environ.get("ANISOLV_SOLVENT_EPS_TRANSFORM", "log")
+if _EPS_TRANSFORM_ENV not in _EPS_STATS:
+    raise ValueError(f"ANISOLV_SOLVENT_EPS_TRANSFORM must be one of "
+                     f"{sorted(_EPS_STATS)}, got {_EPS_TRANSFORM_ENV!r}")
+_SOLVENT_STATS["epsilon"] = dict(_EPS_STATS[_EPS_TRANSFORM_ENV])
+
 
 def _transform(name: str, value: float) -> float:
     """Apply a descriptor's vacuum-anchoring transform (0 at the gas phase)."""
@@ -44,6 +55,8 @@ def _transform(name: str, value: float) -> float:
         return float(value) - 1.0
     if transform == "log":
         return math.log(value)
+    if transform == "born":
+        return 1.0 - 1.0 / float(value)
     return float(value)
 
 _VACUUM_NAMES = {"", "vacuum", "gas", "gas_phase", "gas-phase", "none"}
@@ -336,17 +349,40 @@ def list_aliases() -> dict:
     return dict(sorted(_alias_ci().items()))
 
 
-def normalize(raw_vec) -> list:
+def normalize(raw_vec, eps_transform: str | None = None) -> list:
+    """Vacuum-anchored normalization; eps_transform picks the epsilon channel's
+    stats ('log'/'born'; None -> the env/module default)."""
     if len(raw_vec) != len(SOLVENT_DESCRIPTOR_ORDER):
         raise ValueError(f"raw_vec must have {len(SOLVENT_DESCRIPTOR_ORDER)} values, got {len(raw_vec)}")
-    return [
-        _transform(name, value) / _SOLVENT_STATS[name]["scale"]
-        for name, value in zip(SOLVENT_DESCRIPTOR_ORDER, raw_vec)
-    ]
+    stats = dict(_SOLVENT_STATS)
+    if eps_transform is not None:
+        if eps_transform not in _EPS_STATS:
+            raise ValueError(f"eps_transform must be one of {sorted(_EPS_STATS)}, "
+                             f"got {eps_transform!r}")
+        stats["epsilon"] = _EPS_STATS[eps_transform]
+    out = []
+    for name, value in zip(SOLVENT_DESCRIPTOR_ORDER, raw_vec):
+        tf = stats[name]["transform"]
+        if tf == "shift1":
+            v = float(value) - 1.0
+        elif tf == "log":
+            v = math.log(value)
+        elif tf == "born":
+            v = 1.0 - 1.0 / float(value)
+        else:
+            v = float(value)
+        out.append(v / stats[name]["scale"])
+    return out
 
 
-def get_solvent_vector(solvent_name, strict: bool = True) -> torch.Tensor:
-    """Build the (1, SOLVENT_DIM) conditioning vector. None/vacuum -> null vector."""
+def get_solvent_vector(solvent_name, strict: bool = True,
+                       eps_transform: str | None = None) -> torch.Tensor:
+    """Build the (1, SOLVENT_DIM) conditioning vector. None/vacuum -> null vector.
+
+    eps_transform: 'log' (r4 and earlier) / 'born' (r5+). Pass the CHECKPOINT'S
+    value (convert_checkpoint.py bakes it; load_model exposes model.eps_transform);
+    None falls back to ANISOLV_SOLVENT_EPS_TRANSFORM, default 'log'.
+    """
     vec = torch.zeros(1, SOLVENT_DIM, dtype=torch.float32)
     if solvent_name is None:
         return vec
@@ -367,6 +403,7 @@ def get_solvent_vector(solvent_name, strict: bool = True) -> torch.Tensor:
         logging.warning("Unknown solvent '%s'; using the vacuum vector.", solvent_name)
         return vec
     raw = [solvents[key][name] for name in SOLVENT_DESCRIPTOR_ORDER]
-    vec[0, : len(SOLVENT_DESCRIPTOR_ORDER)] = torch.tensor(normalize(raw), dtype=torch.float32)
+    vec[0, : len(SOLVENT_DESCRIPTOR_ORDER)] = torch.tensor(
+        normalize(raw, eps_transform=eps_transform), dtype=torch.float32)
     vec[0, len(SOLVENT_DESCRIPTOR_ORDER)] = 1.0
     return vec

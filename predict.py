@@ -61,7 +61,8 @@ def predict_solvation_energy(
 
     if solvent is _DEFAULT_SOLVENT:
         solvent = "water"
-    solvent_vec = get_solvent_vector(solvent)
+    solvent_vec = get_solvent_vector(
+        solvent, eps_transform=getattr(model, "eps_transform", None))
 
     data = build_atomic_data(atoms_or_arrays, charge=charge, spin=spin,
                              solvent=solvent_vec, dtype=dtype, device=device)

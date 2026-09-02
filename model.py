@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 from pathlib import Path
@@ -226,6 +227,22 @@ def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
     backbone = backbone_cls(**cfg)
     head = MLP_EFS_Head(backbone)  # nulls backbone.energy_block/force_block internally
     model = AniSolvModel(backbone, head, ckpt["norm"], settings=settings)
+    model.eps_transform = ckpt.get("eps_transform")
+    if model.eps_transform is None:
+        env = os.environ.get("ANISOLV_SOLVENT_EPS_TRANSFORM")
+        if env:
+            import logging
+            logging.warning("checkpoint %s lacks eps_transform; using env override %r",
+                            path.name, env)
+            model.eps_transform = env
+        else:
+            raise ValueError(
+                f"checkpoint {path} carries no eps_transform tag. Re-tag it "
+                f"(lr_augment/scripts/12_backfill_eps_tag.py for log-era files, or "
+                f"reconvert via convert_checkpoint.py <in> <name> <log|born>), or set "
+                f"ANISOLV_SOLVENT_EPS_TRANSFORM explicitly.")
+    if model.eps_transform not in ("log", "born"):
+        raise ValueError(f"bad eps_transform {model.eps_transform!r} in {path}")
 
     missing, unexpected = model.load_state_dict(ckpt["state_dict"], strict=False)
     # Only non-persistent buffers (grid mats) may be "missing"; nothing should be unexpected.
