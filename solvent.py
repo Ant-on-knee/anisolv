@@ -32,7 +32,7 @@ _SOLVENT_STATS = {
     "alpha": {"transform": "linear", "scale": 0.181746},
     "beta": {"transform": "linear", "scale": 0.234892},
     "gamma": {"transform": "linear", "scale": 11.688257},
-    "epsilon": {"transform": "log", "scale": 0.960804},
+    "epsilon": {"transform": "born", "scale": 0.165059},
     "aromaticity": {"transform": "linear", "scale": 0.322355},
     "en-halogen": {"transform": "linear", "scale": 0.174984},
 }

@@ -1,7 +1,7 @@
 """Public inference API: predict_solvation_energy -> (dE in eV, dF in eV/angstrom).
 
 dE = E_solv - E_gas 
-Auto-selects the best available model (model_smd > model_smd_compact)
+Auto-selects the best available model (model_moe > model_compact)
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ def predict_solvation_energy(
     charge, spin      : total charge and spin multiplicity (defaults 0 / 1).
     solvent           : solvent name (str), or None for the gas/vacuum baseline. 
                         default solvent is water
-    checkpoint        : None (default; auto-selects 'model_smd' if its weights are present, else 'model_smd_compact'), 
+    checkpoint        : None (default; auto-selects 'model_moe' if its weights are present, else 'model_compact'), 
                         a checkpoint name, or a path to a valid .pt.
     dtype             : torch.float32 (default) or torch.float64.
     inference_settings: 'default' (reference implementation), 

@@ -46,6 +46,6 @@ packages = [
 
 [tool.setuptools.package-data]
 # Include compact weights.
-# model_smd.pt is intentionally excluded — it is downloaded separately.
-"anisolv" = ["_const/*.json", "_const/*.pt", "models/model_smd_compact.pt"]
+# model_moe.pt is intentionally excluded — it is downloaded separately.
+"anisolv" = ["_const/*.json", "_const/*.pt", "models/model_compact.pt"]
 "anisolv._backbone" = ["*.pt"]
