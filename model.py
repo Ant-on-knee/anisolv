@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 from pathlib import Path
@@ -44,14 +45,14 @@ def tf32_context_manager():
         torch.set_float32_matmul_precision(old_prec)
 
 # Supported checkpoints, in auto-selection priority order. 
-# 'model_smd' (highest accuracy, download from HF); 
-# 'model_smd_compact' (trained from scratch, ~25 MB) is included in the repo and always available.
-# ('model1' and 'model1_compact' are deprecated: superseded by these two.)
-_CHECKPOINT_PRIORITY = ("model_smd", "model_smd_compact")
+# 'model_moe' (highest accuracy, download from HF); 
+# 'model_compact' (trained from scratch, ~25 MB) is included in the repo and always available.
+# ('model1'/'model1_compact' and 'model_smd'/'model_smd_compact' are deprecated: superseded by these two.)
+_CHECKPOINT_PRIORITY = ("model_moe", "model_compact")
 
 def default_checkpoint() -> str:
-    """Checkpoint used when the caller names none: the first of 'model_smd' > 
-    'model_smd_compact' whose .pt is present in the models dir."""
+    """Checkpoint used when the caller names none: the first of 'model_moe' > 
+    'model_compact' whose .pt is present in the models dir."""
     for name in _CHECKPOINT_PRIORITY:
         if (_CKPT_DIR / f"{name}.pt").exists():
             return name
@@ -68,8 +69,8 @@ def print_default_checkpoint_path() -> None:
     print(default_checkpoint_path())
 
 _BACKBONES = {
-    "eSCNMDBackbone": eSCNMDBackbone,        # non-MoE, solvent-conditioned (model_smd_compact)
-    "eSCNMDMoeBackbone": eSCNMDMoeBackbone,  # UMA-S-1.2 mixture-of-experts (model_smd)
+    "eSCNMDBackbone": eSCNMDBackbone,        # non-MoE, solvent-conditioned (model_compact)
+    "eSCNMDMoeBackbone": eSCNMDMoeBackbone,  # UMA-S-1.2 mixture-of-experts (model_moe)
 }
 _DEFAULT_BACKBONE = "eSCNMDMoeBackbone"
 
@@ -148,8 +149,8 @@ def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
                inference_settings: str | InferenceSettings = "default") -> AniSolvModel:
     """Build and load the standalone delta model from a converted checkpoint.
 
-    `checkpoint` is None (auto: 'model_smd' if its weights are present in anisolv/models, else
-    the included 'model_smd_compact'), a checkpoint name, or a path to a converted .pt. Returns an
+    `checkpoint` is None (auto: 'model_moe' if its weights are present in anisolv/models, else
+    the included 'model_compact'), a checkpoint name, or a path to a converted .pt. Returns an
     AniSolvModel in eval mode on `device` with params cast to `dtype` (use torch.float64 for
     high-accuracy checks).
 
@@ -159,8 +160,8 @@ def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
     'fast_gpu' (adds the Triton Wigner kernels; CUDA-only)
     or a custom InferenceSettings (whose `execution_mode` field picks the backend).
 
-    'fast'/'umas_fast_pytorch' is composition-independent on the non-MoE 'model_smd_compact'.
-    On the MoE 'model_smd' it would need a MoE merge first, so it is downgraded to 'general' + tf32
+    'fast'/'umas_fast_pytorch' is composition-independent on the non-MoE 'model_compact'.
+    On the MoE 'model_moe' it would need a MoE merge first, so it is downgraded to 'general' + tf32
 
     'fast_gpu'/'umas_fast_gpu' (requires CUDA, lmax==mmax==2, triton) auto-manages the merge by backbone:
     compact models' performance remains identical to fast;
@@ -226,6 +227,22 @@ def load_model(checkpoint: str | Path | None = None, device: str = "cpu",
     backbone = backbone_cls(**cfg)
     head = MLP_EFS_Head(backbone)  # nulls backbone.energy_block/force_block internally
     model = AniSolvModel(backbone, head, ckpt["norm"], settings=settings)
+    model.eps_transform = ckpt.get("eps_transform")
+    if model.eps_transform is None:
+        env = os.environ.get("ANISOLV_SOLVENT_EPS_TRANSFORM")
+        if env:
+            import logging
+            logging.warning("checkpoint %s lacks eps_transform; using env override %r",
+                            path.name, env)
+            model.eps_transform = env
+        else:
+            raise ValueError(
+                f"checkpoint {path} carries no eps_transform tag. Re-tag it "
+                f"(lr_augment/scripts/12_backfill_eps_tag.py for log-era files, or "
+                f"reconvert via convert_checkpoint.py <in> <name> <log|born>), or set "
+                f"ANISOLV_SOLVENT_EPS_TRANSFORM explicitly.")
+    if model.eps_transform not in ("log", "born"):
+        raise ValueError(f"bad eps_transform {model.eps_transform!r} in {path}")
 
     missing, unexpected = model.load_state_dict(ckpt["state_dict"], strict=False)
     # Only non-persistent buffers (grid mats) may be "missing"; nothing should be unexpected.

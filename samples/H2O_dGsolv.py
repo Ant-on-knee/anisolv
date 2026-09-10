@@ -13,8 +13,8 @@ but the solvation model is compatible with any gas phase potential (MLIP or DFT)
 Unlike H2O_single_point.py, this sample therefore needs ASE + a base potential (fairchem UMA
 by default)
 
-    python anisolv/samples/H2O_dGsolv.py                              # auto: model_smd > model_smd_compact
-    python anisolv/samples/H2O_dGsolv.py --checkpoint model_smd_compact  # or a name / path to a .pt
+    python anisolv/samples/H2O_dGsolv.py                              # auto: model_moe > model_compact
+    python anisolv/samples/H2O_dGsolv.py --checkpoint model_compact  # or a name / path to a .pt
 """
 
 from __future__ import annotations
@@ -158,7 +158,7 @@ def water() -> Atoms:
 
 
 def main(base=None, device="cpu", temperature=298.15, checkpoint=None) -> int:
-    """``checkpoint``: anisolv checkpoint name or path (None -> auto: model_smd > model_smd_compact)."""
+    """``checkpoint``: anisolv checkpoint name or path (None -> auto: model_moe > model_compact)."""
     base = base if base is not None else make_uma_base(device=device)
     delta = AniSolvDeltaCalculator(checkpoint=checkpoint, device=device)
     ckpt_label = checkpoint or f"{default_checkpoint_path().stem} (auto-selected)"
@@ -198,7 +198,7 @@ def main(base=None, device="cpu", temperature=298.15, checkpoint=None) -> int:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="harmonic thermodynamic-cycle dG_solv of H2O in water")
     ap.add_argument("--checkpoint", default=None,
-                    help="anisolv checkpoint name or path to a .pt (default: auto, model_smd > model_smd_compact)")
+                    help="anisolv checkpoint name or path to a .pt (default: auto, model_moe > model_compact)")
     ap.add_argument("--device", default="cpu", help="torch device for both potentials (default: cpu)")
     ap.add_argument("--temperature", type=float, default=298.15, help="temperature in K (default: 298.15)")
     a = ap.parse_args()

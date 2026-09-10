@@ -3,10 +3,10 @@
 takes a handful of small solutes, obtains the water solvation correction, and reports it against
 experimental hydration free energies.
 
-    python anisolv/samples/H2O_single_point.py                              # auto: model_smd > model_smd_compact
-    python anisolv/samples/H2O_single_point.py --checkpoint model_smd_compact  # or a name / path to a .pt
+    python anisolv/samples/H2O_single_point.py                              # auto: model_moe > model_compact
+    python anisolv/samples/H2O_single_point.py --checkpoint model_compact  # or a name / path to a .pt
 
-To use ASE's geometries instead of the bundled fallback, install the optional extra:
+To use ASE's geometries instead of the included fallback, install the optional extra:
 
     pip install "anisolv[ase]"
 
@@ -28,7 +28,7 @@ try:
     from ase.build import molecule  # noqa: E402
 
     HAVE_ASE = True
-except ImportError:  # ASE is optional -- fall back to the bundled geometries in _FALLBACK_GEOM.
+except ImportError:  # ASE is optional -- fall back to the included geometries in _FALLBACK_GEOM.
     molecule = None
     HAVE_ASE = False
 
@@ -93,14 +93,14 @@ _FALLBACK_GEOM = {
 def _resolve(name: str):
     """Return (atomic_numbers, positions[angstrom], chemical formula) for a g2 solute.
 
-    Uses ASE's g2 geometry when ASE is importable, otherwise the bundled fallback above.
+    Uses ASE's g2 geometry when ASE is importable, otherwise the included fallback above.
     """
     if HAVE_ASE:
         a = molecule(name)
         return a.numbers.tolist(), a.get_positions().tolist(), a.get_chemical_formula()
     if name not in _FALLBACK_GEOM:
         raise KeyError(
-            f"no bundled fallback geometry for {name!r}; install ASE (pip install ase) "
+            f"no included fallback geometry for {name!r}; install ASE (pip install ase) "
             f"or add it to _FALLBACK_GEOM"
         )
     return _FALLBACK_GEOM[name]
@@ -109,7 +109,7 @@ def _resolve(name: str):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="single-point hydration dG of small solutes via anisolv")
     ap.add_argument("--checkpoint", default=None,
-                    help="checkpoint name or path to a .pt (default: auto, model_smd > model_smd_compact)")
+                    help="checkpoint name or path to a .pt (default: auto, model_moe > model_compact)")
     ap.add_argument("--device", default="cpu", help="torch device: cpu (default), cuda, or mps")
     args = ap.parse_args(argv)
     ckpt_label = args.checkpoint or f"{default_checkpoint_path().stem} (auto-selected)"
@@ -120,7 +120,7 @@ def main(argv=None) -> int:
     assert dE0 == 0.0, f"vacuum baseline not zero: {dE0} eV"
     print(f"[check] vacuum baseline dE(H2O, solvent=None) = {dE0:.1f} eV  (expected exactly 0)")
     print(f"[info]  checkpoint: {ckpt_label}   device: {args.device}")
-    print(f"[info]  geometry source: {'ASE g2' if HAVE_ASE else 'bundled fallback (ASE not found)'}\n")
+    print(f"[info]  geometry source: {'ASE g2' if HAVE_ASE else 'included fallback (ASE not found)'}\n")
 
     print(f"{'solute':14s} {'formula':10s} {'n':>3} "
           f"{'dG_pred':>9} {'dG_exp':>9} {'error':>9}   (kcal/mol)")

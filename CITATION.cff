@@ -1,6 +1,6 @@
 # Citation metadata for the AniSolv code.
 #
-# NOTE: the trained model weights (model_smd.pt) are NOT in this repository.
+# NOTE: the trained model weights (model_moe.pt) are NOT in this repository.
 # They are released separately on Hugging Face under the FAIR Chemistry License — a
 # derivative of Meta's UMA (uma-s-1p2), not MIT. This file cites the *software*; please also cite
 # the UMA model (listed under `references`) that the weights derive from.

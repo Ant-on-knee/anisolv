@@ -1,5 +1,5 @@
 models/*
-!models/model_smd_compact.pt
+!models/model_compact.pt
 __pycache__/
 *.pyc
 .vscode/
